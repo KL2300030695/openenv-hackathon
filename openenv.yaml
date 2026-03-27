@@ -1,0 +1,24 @@
+version: "1.0"
+metadata:
+  name: "Healthcare Appointment Scheduling"
+  description: "A reinforcement learning environment simulating a hospital appointment booking system."
+  version: "1.0.0"
+  author: "Antigravity AI"
+  tags: ["healthcare", "scheduling", "optimization", "RL"]
+
+environment:
+  type: "discrete"
+  observation_space:
+    type: "dict"
+    description: "Contains doctor slots, patient info, and waiting queue."
+  action_space:
+    type: "dict"
+    description: "Actions include book, reschedule, cancel, and waitlist."
+
+endpoints:
+  reset: "/reset"
+  step: "/step"
+  state: "/state"
+  tasks: "/tasks"
+  grader: "/grader"
+  baseline: "/baseline"
