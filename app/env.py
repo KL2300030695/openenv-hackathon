@@ -15,23 +15,23 @@ class HealthcareEnv:
 
     def reset(self):
         """Resets the environment to initial state."""
-        # Doctors availability: [[slot_0_available, slot_1_available, ...], ...]
+        # Doctors availability: {doctor_id: [slot_0_available, slot_1_available, ...]}
         # True means slot is available (free), False means booked.
-        self.doctor_slots = [[True] * self.num_slots for _ in range(self.num_doctors)]
+        self.doctor_slots = {i: [True] * self.num_slots for i in range(self.num_doctors)}
         
-        # Patients: [{"id": i, "priority": p, ...}, ...]
-        self.patients = []
+        # Patients: {patient_id: {"priority": p, "preferred_doctor": d, "status": "waiting/booked/cancelled"}}
+        self.patients = {}
         for i in range(self.num_patients):
-            self.patients.append({
+            self.patients[i] = {
                 "id": i,
                 "priority": random.choice(self.priorities),
                 "preferred_doctor": random.randint(0, self.num_doctors - 1),
                 "status": "waiting",
                 "booked_slot": None,
                 "booked_doctor": None
-            })
+            }
         
-        self.waiting_queue = list(range(self.num_patients))
+        self.waiting_queue = list(self.patients.keys())
         self.current_step = 0
         self.max_steps = self.num_patients * 2  # Allow some buffer for rescheduling
         self.done = False
@@ -86,10 +86,10 @@ class HealthcareEnv:
         return self._get_obs(), reward, self.done, info
 
     def _handle_book(self, patient_id, doctor_id, slot_id) -> tuple:
-        if not (0 <= patient_id < len(self.patients)) or self.patients[patient_id]["status"] != "waiting":
+        if patient_id not in self.patients or self.patients[patient_id]["status"] != "waiting":
             return -1, {"error": "Patient not in waiting queue or invalid ID"}
         
-        if not (0 <= doctor_id < len(self.doctor_slots)) or slot_id < 0 or slot_id >= self.num_slots:
+        if doctor_id not in self.doctor_slots or slot_id < 0 or slot_id >= self.num_slots:
             return -1, {"error": "Invalid doctor or slot ID"}
 
         if not self.doctor_slots[doctor_id][slot_id]:
@@ -115,10 +115,10 @@ class HealthcareEnv:
         return reward, {"status": "success"}
 
     def _handle_reschedule(self, patient_id, doctor_id, slot_id) -> tuple:
-        if not (0 <= patient_id < len(self.patients)) or self.patients[patient_id]["status"] != "booked":
+        if patient_id not in self.patients or self.patients[patient_id]["status"] != "booked":
             return -1, {"error": "Patient not booked"}
 
-        if not (0 <= doctor_id < len(self.doctor_slots)) or slot_id < 0 or slot_id >= self.num_slots:
+        if doctor_id not in self.doctor_slots or slot_id < 0 or slot_id >= self.num_slots:
             return -1, {"error": "Invalid doctor or slot ID"}
 
         if not self.doctor_slots[doctor_id][slot_id]:
@@ -139,7 +139,7 @@ class HealthcareEnv:
         return 0.5, {"status": "success"}  # Partial reward for rescheduling
 
     def _handle_cancel(self, patient_id) -> tuple:
-        if not (0 <= patient_id < len(self.patients)) or self.patients[patient_id]["status"] == "waiting":
+        if patient_id not in self.patients or self.patients[patient_id]["status"] == "waiting":
              return -1, {"error": "Patient not booked"}
 
         # Free slot if booked
@@ -159,7 +159,7 @@ class HealthcareEnv:
         return -0.2, {"status": "cancelled"}  # Penalty for cancellation
 
     def _handle_waitlist(self, patient_id) -> tuple:
-        if not (0 <= patient_id < len(self.patients)) or self.patients[patient_id]["status"] != "waiting":
+        if patient_id not in self.patients or self.patients[patient_id]["status"] != "waiting":
             return -1, {"error": "Patient not in waiting or already booked"}
         
         # Just keep them in waiting queue, maybe prioritize later?
