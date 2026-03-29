@@ -23,3 +23,20 @@ endpoints:
   tasks: "/tasks"
   grader: "/grader"
   baseline: "/baseline"
+
+tasks:
+  - id: task_1
+    name: "Book an Appointment"
+    difficulty: easy
+    description: "Successfully book an appointment when slots are available."
+    score_range: [0.0, 1.0]
+  - id: task_2
+    name: "Handle Scheduling Conflicts"
+    difficulty: medium
+    description: "Handle scheduling conflicts and rescheduling efficiently."
+    score_range: [0.0, 1.0]
+  - id: task_3
+    name: "Priority Scheduling"
+    difficulty: hard
+    description: "Optimize scheduling for multiple patients with different priorities."
+    score_range: [0.0, 1.0]
