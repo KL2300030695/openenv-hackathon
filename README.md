@@ -1,3 +1,12 @@
+---
+title: Healthcare Appointment Scheduling
+emoji: 🏥
+colorFrom: blue
+colorTo: green
+sdk: docker
+pinned: false
+---
+
 # Healthcare Appointment Scheduling RL Environment
 
 This project implements a complete OpenEnv-compatible reinforcement learning environment simulating a real-world hospital appointment booking system.
