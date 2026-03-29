@@ -1,0 +1,20 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.backends.legacy:build"
+
+[project]
+name = "healthcare-rl-env"
+version = "1.0.0"
+description = "Healthcare Appointment Scheduling RL Environment"
+requires-python = ">=3.9"
+dependencies = [
+    "fastapi",
+    "uvicorn[standard]",
+    "pydantic",
+    "typing-extensions",
+    "openai",
+]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["app*"]
