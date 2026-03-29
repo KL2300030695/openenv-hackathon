@@ -1,11 +1,11 @@
-from pydantic import BaseModel
-from typing import Dict, Any, List, Optional
+from pydantic import BaseModel, field_validator
+from typing import Dict, Any, List, Optional, Union
 
 class Action(BaseModel):
     type: str # book/reschedule/cancel/waitlist
-    patient_id: int
-    doctor_id: Optional[int] = None
-    slot_id: Optional[int] = None
+    patient_id: Union[int, str]
+    doctor_id: Optional[Union[int, str]] = None
+    slot_id: Optional[Union[int, str]] = None
 
 class StepResponse(BaseModel):
     observation: Dict[str, Any]
@@ -15,8 +15,6 @@ class StepResponse(BaseModel):
 
 class ResetResponse(BaseModel):
     observation: Dict[str, Any]
-    reward: float = 0.0
-    done: bool = False
     info: Dict[str, Any] = {}
 
 class StateResponse(BaseModel):

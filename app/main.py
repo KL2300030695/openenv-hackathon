@@ -14,19 +14,19 @@ env = HealthcareEnv()
 def read_root():
     return {"message": "Healthcare Appointment Scheduling RL Environment API"}
 
-@app.post("/reset", response_model=ResetResponse)
+@app.api_route("/reset", methods=["GET", "POST"], response_model=ResetResponse)
 def reset_env():
     obs = env.reset()
     return {
         "observation": obs,
-        "reward": 0.0,
-        "done": False,
         "info": {}
     }
 
 @app.post("/step", response_model=StepResponse)
 def step_env(action: Action):
-    obs, reward, done, info = env.step(action.dict())
+    # Convert Pydantic model to dict for environment handling
+    action_dict = action.model_dump() if hasattr(action, "model_dump") else action.dict()
+    obs, reward, done, info = env.step(action_dict)
     return {
         "observation": obs,
         "reward": reward,

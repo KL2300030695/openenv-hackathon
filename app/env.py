@@ -1,5 +1,5 @@
 import random
-from typing import Dict, List, Any, Optional
+from typing import Dict, List, Any, Optional, Union
 
 class HealthcareEnv:
     """
@@ -39,11 +39,11 @@ class HealthcareEnv:
         return self._get_obs()
 
     def _get_obs(self) -> Dict[str, Any]:
-        """Returns the current observation of the environment."""
+        """Returns the current observation of the environment with string keys for JSON serialization."""
         return {
-            "doctor_slots": self.doctor_slots,
-            "patients": self.patients,
-            "waiting_queue": self.waiting_queue,
+            "doctor_slots": {str(k): v for k, v in self.doctor_slots.items()},
+            "patients": {str(k): v for k, v in self.patients.items()},
+            "waiting_queue": [str(p) for p in self.waiting_queue],
             "current_step": self.current_step
         }
 
@@ -55,14 +55,20 @@ class HealthcareEnv:
         """
         Performs an action in the environment.
         Action format: {"type": "book/reschedule/cancel/waitlist", "patient_id": pid, "doctor_id": did, "slot_id": sid}
+        Robustly handles string IDs from external clients/LLMs.
         """
         if self.done:
             return self._get_obs(), 0, True, {"error": "Environment done"}
 
         action_type = action.get("type")
-        patient_id = action.get("patient_id")
-        doctor_id = action.get("doctor_id")
-        slot_id = action.get("slot_id")
+        
+        # Robustly convert IDs to integers
+        try:
+            patient_id = int(action.get("patient_id")) if action.get("patient_id") is not None else None
+            doctor_id = int(action.get("doctor_id")) if action.get("doctor_id") is not None else None
+            slot_id = int(action.get("slot_id")) if action.get("slot_id") is not None else None
+        except (ValueError, TypeError):
+            return self._get_obs(), -1, self.done, {"error": "Invalid ID format (must be numeric)"}
 
         reward = 0
         info = {}
@@ -87,9 +93,9 @@ class HealthcareEnv:
 
     def _handle_book(self, patient_id, doctor_id, slot_id) -> tuple:
         if patient_id not in self.patients or self.patients[patient_id]["status"] != "waiting":
-            return -1, {"error": "Patient not in waiting queue or invalid ID"}
+            return -1, {"error": f"Patient ID {patient_id} not available for booking"}
         
-        if doctor_id not in self.doctor_slots or slot_id < 0 or slot_id >= self.num_slots:
+        if doctor_id not in self.doctor_slots or slot_id is None or slot_id < 0 or slot_id >= self.num_slots:
             return -1, {"error": "Invalid doctor or slot ID"}
 
         if not self.doctor_slots[doctor_id][slot_id]:
@@ -110,19 +116,17 @@ class HealthcareEnv:
         if self.patients[patient_id]["preferred_doctor"] == doctor_id:
             reward += 0.2  # Bonus for preferred doctor
         
-        # Priority multiplier: higher priority (lower value) gets more weight? 
-        # Actually, let's just use fixed +1 and +0.3 for waitlist.
         return reward, {"status": "success"}
 
     def _handle_reschedule(self, patient_id, doctor_id, slot_id) -> tuple:
         if patient_id not in self.patients or self.patients[patient_id]["status"] != "booked":
-            return -1, {"error": "Patient not booked"}
+            return -1, {"error": "Patient not currently booked"}
 
-        if doctor_id not in self.doctor_slots or slot_id < 0 or slot_id >= self.num_slots:
+        if doctor_id not in self.doctor_slots or slot_id is None or slot_id < 0 or slot_id >= self.num_slots:
             return -1, {"error": "Invalid doctor or slot ID"}
 
         if not self.doctor_slots[doctor_id][slot_id]:
-            return -1, {"error": "Slot already booked (conflict)"}
+            return -1, {"error": "Target slot already booked (conflict)"}
 
         # Free old slot
         old_doctor = self.patients[patient_id]["booked_doctor"]
@@ -136,7 +140,7 @@ class HealthcareEnv:
             "booked_doctor": doctor_id
         })
         
-        return 0.5, {"status": "success"}  # Partial reward for rescheduling
+        return 0.5, {"status": "success"}
 
     def _handle_cancel(self, patient_id) -> tuple:
         if patient_id not in self.patients or self.patients[patient_id]["status"] == "waiting":
@@ -156,12 +160,10 @@ class HealthcareEnv:
         if patient_id not in self.waiting_queue:
             self.waiting_queue.append(patient_id)
             
-        return -0.2, {"status": "cancelled"}  # Penalty for cancellation
+        return -0.2, {"status": "cancelled"}
 
     def _handle_waitlist(self, patient_id) -> tuple:
         if patient_id not in self.patients or self.patients[patient_id]["status"] != "waiting":
-            return -1, {"error": "Patient not in waiting or already booked"}
+            return -1, {"error": "Patient not in waiting queue"}
         
-        # Just keep them in waiting queue, maybe prioritize later?
-        # In this simple model, waitlist action is like "skip for now"
         return 0.3, {"status": "waitlisted"}
