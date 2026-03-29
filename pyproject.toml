@@ -3,18 +3,22 @@ requires = ["setuptools>=61.0"]
 build-backend = "setuptools.backends.legacy:build"
 
 [project]
-name = "healthcare-rl-env"
+name = "openenv-hackathon"
 version = "1.0.0"
 description = "Healthcare Appointment Scheduling RL Environment"
-requires-python = ">=3.9"
+requires-python = ">=3.10"
 dependencies = [
     "fastapi",
     "uvicorn[standard]",
     "pydantic",
     "typing-extensions",
     "openai",
+    "openenv-core>=0.2.0",
 ]
+
+[project.scripts]
+server = "server.app:app"
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["app*"]
+include = ["app*", "server*"]
