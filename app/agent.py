@@ -18,8 +18,8 @@ class BaselineAgent:
         if not waiting_queue:
             return {"type": "waitlist", "patient_id": -1}
 
-        patients = obs.get("patients", {})
-        doctor_slots = obs.get("doctor_slots", {})
+        patients = obs.get("patients", [])
+        doctor_slots = obs.get("doctor_slots", [])
         
         # Sort waiting patients by priority (1 is highest)
         waiting_patients = [patients[pid] for pid in waiting_queue]
@@ -30,7 +30,7 @@ class BaselineAgent:
             preferred_doctor = patient["preferred_doctor"]
             
             # 1. Try preferred doctor
-            if preferred_doctor in doctor_slots:
+            if 0 <= preferred_doctor < len(doctor_slots):
                 for sid, available in enumerate(doctor_slots[preferred_doctor]):
                     if available:
                         return {
@@ -41,7 +41,7 @@ class BaselineAgent:
                         }
             
             # 2. Try any other doctor
-            for did, slots in doctor_slots.items():
+            for did, slots in enumerate(doctor_slots):
                 if did == preferred_doctor:
                     continue
                 for sid, available in enumerate(slots):

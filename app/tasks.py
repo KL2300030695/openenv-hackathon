@@ -19,7 +19,7 @@ class TaskGrader:
         Task 1 (Easy): successfully book an appointment when slots are available.
         Score based on number of waiting patients booked.
         """
-        booked_count = sum(1 for p in self.env.patients.values() if p["status"] == "booked")
+        booked_count = sum(1 for p in self.env.patients if p["status"] == "booked")
         total_patients = len(self.env.patients)
         return min(1.0, booked_count / (total_patients * 0.5))  # 50% booking is enough for full score here
 
@@ -30,7 +30,7 @@ class TaskGrader:
         """
         # We can track successful reschedules in the info dict if we want,
         # but for simplicity, let's use efficiency.
-        booked_count = sum(1 for p in self.env.patients.values() if p["status"] == "booked")
+        booked_count = sum(1 for p in self.env.patients if p["status"] == "booked")
         # In Task 2, we expect some rescheduling to happen.
         return min(1.0, booked_count / (len(self.env.patients) * 0.7))
 
@@ -39,11 +39,11 @@ class TaskGrader:
         Task 3 (Hard): Optimize scheduling for multiple patients with different priorities.
         Score based on priority completion. Priority 1 should be booked FIRST.
         """
-        p1_total = sum(1 for p in self.env.patients.values() if p["priority"] == 1)
-        p1_booked = sum(1 for p in self.env.patients.values() if p["priority"] == 1 and p["status"] == "booked")
+        p1_total = sum(1 for p in self.env.patients if p["priority"] == 1)
+        p1_booked = sum(1 for p in self.env.patients if p["priority"] == 1 and p["status"] == "booked")
         
-        p2_total = sum(1 for p in self.env.patients.values() if p["priority"] == 2)
-        p2_booked = sum(1 for p in self.env.patients.values() if p["priority"] == 2 and p["status"] == "booked")
+        p2_total = sum(1 for p in self.env.patients if p["priority"] == 2)
+        p2_booked = sum(1 for p in self.env.patients if p["priority"] == 2 and p["status"] == "booked")
         
         if p1_total == 0:
             p1_score = 1.0
