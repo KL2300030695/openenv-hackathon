@@ -17,13 +17,18 @@ def read_root():
 @app.post("/reset", response_model=ResetResponse)
 def reset_env():
     obs = env.reset()
-    return {"obs": obs}
+    return {
+        "observation": obs,
+        "reward": 0.0,
+        "done": False,
+        "info": {}
+    }
 
 @app.post("/step", response_model=StepResponse)
 def step_env(action: Action):
     obs, reward, done, info = env.step(action.dict())
     return {
-        "obs": obs,
+        "observation": obs,
         "reward": reward,
         "done": done,
         "info": info

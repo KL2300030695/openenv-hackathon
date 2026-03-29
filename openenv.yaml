@@ -5,6 +5,7 @@ metadata:
   version: "1.0.0"
   author: "Antigravity AI"
   tags: ["healthcare", "scheduling", "optimization", "RL"]
+  inference_script: "inference.py"
 
 environment:
   type: "discrete"
