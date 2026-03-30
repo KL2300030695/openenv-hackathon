@@ -1,9 +1,12 @@
 from fastapi import FastAPI, HTTPException
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
 from app.env import HealthcareEnv
 from app.agent import BaselineAgent
 from app.tasks import TASKS, TaskGrader
 from app.models import Action, StepResponse, ResetResponse, StateResponse, TaskResponse, GraderResponse, BaselineResponse
 from typing import List, Dict, Any
+import os
 
 DESCRIPTION = """
 ## OpenEnv Environment HTTP API
@@ -34,11 +37,18 @@ app = FastAPI(
     title="OpenEnv Environment HTTP API",
     version="1.0.0",
     description=DESCRIPTION,
-    docs_url="/",
 )
+
+# Serve static files
+STATIC_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "static")
+app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
 # Global environment instance
 env = HealthcareEnv()
+
+@app.get("/", include_in_schema=False)
+def serve_frontend():
+    return FileResponse(os.path.join(STATIC_DIR, "index.html"))
 
 @app.api_route("/reset", methods=["GET", "POST"], response_model=ResetResponse)
 def reset_env():

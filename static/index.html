@@ -1,0 +1,983 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Healthcare Scheduling RL Environment</title>
+  <meta name="description" content="Interactive RL environment for healthcare appointment scheduling — OpenEnv compatible." />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+    :root {
+      --bg: #0b0e17;
+      --surface: rgba(255,255,255,0.04);
+      --surface-hover: rgba(255,255,255,0.08);
+      --border: rgba(255,255,255,0.08);
+      --text: #e2e8f0;
+      --text-dim: #94a3b8;
+      --accent: #6366f1;
+      --accent-glow: rgba(99,102,241,0.35);
+      --green: #22c55e;
+      --green-glow: rgba(34,197,94,0.25);
+      --amber: #f59e0b;
+      --amber-glow: rgba(245,158,11,0.25);
+      --red: #ef4444;
+      --red-glow: rgba(239,68,68,0.2);
+      --cyan: #06b6d4;
+      --radius: 16px;
+      --radius-sm: 10px;
+    }
+
+    body {
+      font-family: 'Inter', -apple-system, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+
+    /* Animated gradient orbs in background */
+    body::before, body::after {
+      content: '';
+      position: fixed;
+      border-radius: 50%;
+      filter: blur(120px);
+      opacity: 0.3;
+      pointer-events: none;
+      z-index: 0;
+    }
+    body::before {
+      width: 600px; height: 600px;
+      background: radial-gradient(circle, var(--accent) 0%, transparent 70%);
+      top: -200px; left: -100px;
+      animation: float1 20s ease-in-out infinite;
+    }
+    body::after {
+      width: 500px; height: 500px;
+      background: radial-gradient(circle, var(--cyan) 0%, transparent 70%);
+      bottom: -150px; right: -100px;
+      animation: float2 25s ease-in-out infinite;
+    }
+    @keyframes float1 { 0%,100%{transform:translate(0,0)} 50%{transform:translate(80px,60px)} }
+    @keyframes float2 { 0%,100%{transform:translate(0,0)} 50%{transform:translate(-60px,-80px)} }
+
+    .container {
+      max-width: 1280px;
+      margin: 0 auto;
+      padding: 24px 20px;
+      position: relative;
+      z-index: 1;
+    }
+
+    /* HEADER */
+    header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 32px;
+      flex-wrap: wrap;
+      gap: 16px;
+    }
+    .logo {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+    .logo-icon {
+      width: 48px; height: 48px;
+      background: linear-gradient(135deg, var(--accent), var(--cyan));
+      border-radius: 14px;
+      display: grid; place-items: center;
+      font-size: 24px;
+      box-shadow: 0 4px 20px var(--accent-glow);
+    }
+    .logo h1 {
+      font-size: 1.35rem;
+      font-weight: 700;
+      background: linear-gradient(135deg, #fff 30%, var(--cyan));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+    .logo span {
+      display: block;
+      font-size: 0.75rem;
+      font-weight: 400;
+      color: var(--text-dim);
+      -webkit-text-fill-color: var(--text-dim);
+    }
+    .header-badges {
+      display: flex; gap: 8px; flex-wrap: wrap;
+    }
+    .badge {
+      padding: 6px 14px;
+      border-radius: 999px;
+      font-size: 0.7rem;
+      font-weight: 600;
+      letter-spacing: 0.5px;
+      text-transform: uppercase;
+    }
+    .badge-accent { background: var(--accent-glow); color: #a5b4fc; border: 1px solid rgba(99,102,241,0.3); }
+    .badge-green { background: var(--green-glow); color: #86efac; border: 1px solid rgba(34,197,94,0.3); }
+
+    /* STATS ROW */
+    .stats-row {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 16px;
+      margin-bottom: 28px;
+    }
+    .stat-card {
+      background: var(--surface);
+      backdrop-filter: blur(20px);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 20px 22px;
+      transition: all 0.3s ease;
+    }
+    .stat-card:hover { background: var(--surface-hover); transform: translateY(-2px); }
+    .stat-label {
+      font-size: 0.72rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      color: var(--text-dim);
+      margin-bottom: 8px;
+    }
+    .stat-value {
+      font-size: 1.8rem;
+      font-weight: 800;
+    }
+    .stat-value.accent { color: var(--accent); }
+    .stat-value.green  { color: var(--green); }
+    .stat-value.amber  { color: var(--amber); }
+    .stat-value.cyan   { color: var(--cyan); }
+
+    /* CONTROL BAR */
+    .control-bar {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 28px;
+      flex-wrap: wrap;
+    }
+    .btn {
+      display: inline-flex; align-items: center; gap: 8px;
+      padding: 12px 24px;
+      border: none;
+      border-radius: var(--radius-sm);
+      font-family: inherit;
+      font-size: 0.85rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.25s ease;
+      position: relative;
+      overflow: hidden;
+    }
+    .btn::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(135deg, rgba(255,255,255,0.15), transparent);
+      opacity: 0;
+      transition: opacity 0.25s;
+    }
+    .btn:hover::after { opacity: 1; }
+    .btn:active { transform: scale(0.97); }
+    .btn-primary {
+      background: linear-gradient(135deg, var(--accent), #818cf8);
+      color: #fff;
+      box-shadow: 0 4px 20px var(--accent-glow);
+    }
+    .btn-success {
+      background: linear-gradient(135deg, #059669, var(--green));
+      color: #fff;
+      box-shadow: 0 4px 20px var(--green-glow);
+    }
+    .btn-amber {
+      background: linear-gradient(135deg, #d97706, var(--amber));
+      color: #fff;
+      box-shadow: 0 4px 20px var(--amber-glow);
+    }
+    .btn-ghost {
+      background: var(--surface);
+      color: var(--text);
+      border: 1px solid var(--border);
+    }
+    .btn-ghost:hover { background: var(--surface-hover); }
+    .btn:disabled {
+      opacity: 0.45;
+      cursor: not-allowed;
+      pointer-events: none;
+    }
+
+    /* GRID LAYOUT */
+    .main-grid {
+      display: grid;
+      grid-template-columns: 1fr 380px;
+      gap: 20px;
+    }
+    @media (max-width: 960px) {
+      .main-grid { grid-template-columns: 1fr; }
+    }
+
+    /* PANELS */
+    .panel {
+      background: var(--surface);
+      backdrop-filter: blur(20px);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      overflow: hidden;
+      transition: all 0.3s ease;
+    }
+    .panel:hover { border-color: rgba(255,255,255,0.12); }
+    .panel-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 18px 22px;
+      border-bottom: 1px solid var(--border);
+    }
+    .panel-title {
+      font-size: 0.95rem;
+      font-weight: 700;
+      display: flex; align-items: center; gap: 10px;
+    }
+    .panel-body { padding: 20px 22px; }
+
+    /* DOCTORS GRID */
+    .doctors-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 14px;
+    }
+    @media (max-width: 700px) {
+      .doctors-grid { grid-template-columns: 1fr; }
+    }
+    .doctor-card {
+      background: rgba(255,255,255,0.03);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 16px;
+      transition: all 0.3s ease;
+    }
+    .doctor-card:hover { background: rgba(255,255,255,0.06); transform: translateY(-2px); }
+    .doctor-name {
+      font-size: 0.88rem;
+      font-weight: 700;
+      margin-bottom: 4px;
+      display: flex; align-items: center; gap: 8px;
+    }
+    .doctor-specialty {
+      font-size: 0.72rem;
+      color: var(--text-dim);
+      margin-bottom: 14px;
+    }
+    .slots-grid {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 6px;
+    }
+    .slot {
+      aspect-ratio: 1;
+      border-radius: 8px;
+      display: grid;
+      place-items: center;
+      font-size: 0.68rem;
+      font-weight: 700;
+      cursor: pointer;
+      transition: all 0.25s ease;
+      border: 1px solid transparent;
+      position: relative;
+    }
+    .slot.available {
+      background: var(--green-glow);
+      color: var(--green);
+      border-color: rgba(34,197,94,0.2);
+    }
+    .slot.available:hover {
+      background: rgba(34,197,94,0.4);
+      transform: scale(1.1);
+      box-shadow: 0 0 12px var(--green-glow);
+    }
+    .slot.booked {
+      background: var(--red-glow);
+      color: var(--red);
+      border-color: rgba(239,68,68,0.2);
+    }
+    .slot-label {
+      font-size: 0.6rem; color: var(--text-dim);
+      text-align: center;
+      margin-top: 6px;
+    }
+    .slot-times {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 6px;
+      margin-top: 4px;
+    }
+
+    /* SIDEBAR */
+    .sidebar { display: flex; flex-direction: column; gap: 20px; }
+
+    /* ACTION FORM */
+    .action-form { display: flex; flex-direction: column; gap: 14px; }
+    .form-group label {
+      display: block;
+      font-size: 0.72rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+      color: var(--text-dim);
+      margin-bottom: 6px;
+    }
+    .form-group select, .form-group input {
+      width: 100%;
+      padding: 10px 14px;
+      background: rgba(255,255,255,0.05);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      color: var(--text);
+      font-family: inherit;
+      font-size: 0.85rem;
+      outline: none;
+      transition: border-color 0.25s;
+    }
+    .form-group select:focus, .form-group input:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px var(--accent-glow);
+    }
+    .form-group select option { background: #1e1e2e; }
+
+    /* PATIENTS LIST */
+    .patients-list {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      max-height: 360px;
+      overflow-y: auto;
+    }
+    .patients-list::-webkit-scrollbar { width: 4px; }
+    .patients-list::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+
+    .patient-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 10px 14px;
+      background: rgba(255,255,255,0.02);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      transition: all 0.25s ease;
+      cursor: pointer;
+    }
+    .patient-row:hover { background: rgba(255,255,255,0.06); }
+    .patient-row.selected {
+      border-color: var(--accent);
+      background: var(--accent-glow);
+    }
+    .patient-avatar {
+      width: 34px; height: 34px;
+      border-radius: 50%;
+      display: grid; place-items: center;
+      font-size: 0.75rem;
+      font-weight: 700;
+      flex-shrink: 0;
+    }
+    .priority-high   .patient-avatar { background: var(--red-glow); color: var(--red); }
+    .priority-medium .patient-avatar { background: var(--amber-glow); color: var(--amber); }
+    .priority-low    .patient-avatar { background: var(--green-glow); color: var(--green); }
+    .patient-info { flex: 1; min-width: 0; }
+    .patient-name {
+      font-size: 0.8rem;
+      font-weight: 600;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .patient-meta {
+      font-size: 0.68rem;
+      color: var(--text-dim);
+    }
+    .patient-status {
+      padding: 3px 10px;
+      border-radius: 999px;
+      font-size: 0.62rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .status-waiting  { background: var(--amber-glow); color: var(--amber); }
+    .status-booked   { background: var(--green-glow); color: var(--green); }
+    .status-cancelled { background: var(--red-glow); color: var(--red); }
+
+    /* SCORES */
+    .scores-grid { display: flex; flex-direction: column; gap: 12px; }
+    .score-row {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+    .score-label {
+      font-size: 0.78rem;
+      font-weight: 600;
+      min-width: 70px;
+    }
+    .score-bar-bg {
+      flex: 1;
+      height: 10px;
+      background: rgba(255,255,255,0.06);
+      border-radius: 999px;
+      overflow: hidden;
+    }
+    .score-bar-fill {
+      height: 100%;
+      border-radius: 999px;
+      transition: width 0.6s cubic-bezier(0.22,1,0.36,1);
+    }
+    .score-bar-fill.t1 { background: linear-gradient(90deg, var(--green), #34d399); }
+    .score-bar-fill.t2 { background: linear-gradient(90deg, var(--amber), #fbbf24); }
+    .score-bar-fill.t3 { background: linear-gradient(90deg, var(--accent), #818cf8); }
+    .score-value {
+      font-size: 0.82rem;
+      font-weight: 800;
+      min-width: 42px;
+      text-align: right;
+    }
+
+    /* LOG */
+    .log-area {
+      max-height: 200px;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    .log-area::-webkit-scrollbar { width: 4px; }
+    .log-area::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+    .log-entry {
+      font-size: 0.72rem;
+      padding: 6px 10px;
+      border-radius: 6px;
+      background: rgba(255,255,255,0.02);
+      color: var(--text-dim);
+      font-family: 'SF Mono', 'Cascadia Code', monospace;
+      animation: fadeIn 0.3s ease;
+    }
+    .log-entry.success { color: var(--green); }
+    .log-entry.error   { color: var(--red); }
+    .log-entry.info    { color: var(--cyan); }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(6px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    /* TOAST */
+    .toast-container {
+      position: fixed;
+      bottom: 24px;
+      right: 24px;
+      z-index: 1000;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .toast {
+      padding: 14px 20px;
+      border-radius: var(--radius-sm);
+      font-size: 0.82rem;
+      font-weight: 500;
+      backdrop-filter: blur(20px);
+      animation: slideIn 0.3s ease, fadeOut 0.3s ease 2.7s forwards;
+      max-width: 360px;
+    }
+    .toast.success { background: rgba(34,197,94,0.2); border: 1px solid rgba(34,197,94,0.3); color: #86efac; }
+    .toast.error { background: rgba(239,68,68,0.2); border: 1px solid rgba(239,68,68,0.3); color: #fca5a5; }
+    .toast.info { background: rgba(6,182,212,0.2); border: 1px solid rgba(6,182,212,0.3); color: #67e8f9; }
+    @keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+    @keyframes fadeOut { to { transform: translateY(10px); opacity: 0; } }
+
+    /* Pulse animation for live indicator */
+    .pulse {
+      width: 8px; height: 8px;
+      background: var(--green);
+      border-radius: 50%;
+      animation: pulse 2s ease-in-out infinite;
+    }
+    @keyframes pulse {
+      0%,100% { box-shadow: 0 0 0 0 var(--green-glow); }
+      50%     { box-shadow: 0 0 0 8px transparent; }
+    }
+
+    .step-counter-inline {
+      font-size: 0.75rem;
+      color: var(--text-dim);
+      display: flex; align-items: center; gap: 6px;
+    }
+
+    /* Footer */
+    footer {
+      margin-top: 40px;
+      text-align: center;
+      padding: 20px;
+      font-size: 0.72rem;
+      color: var(--text-dim);
+      border-top: 1px solid var(--border);
+    }
+    footer a {
+      color: var(--accent);
+      text-decoration: none;
+    }
+    footer a:hover { text-decoration: underline; }
+  </style>
+</head>
+<body>
+
+<div class="container">
+  <!-- HEADER -->
+  <header>
+    <div class="logo">
+      <div class="logo-icon">🏥</div>
+      <div>
+        <h1>Healthcare Scheduling RL</h1>
+        <span>OpenEnv Interactive Environment</span>
+      </div>
+    </div>
+    <div class="header-badges">
+      <div class="badge badge-accent">OpenEnv 1.0</div>
+      <div class="badge badge-green" style="display:flex;align-items:center;gap:6px;">
+        <div class="pulse"></div> Live
+      </div>
+    </div>
+  </header>
+
+  <!-- STATS ROW -->
+  <div class="stats-row">
+    <div class="stat-card">
+      <div class="stat-label">Patients Waiting</div>
+      <div class="stat-value amber" id="stat-waiting">—</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Patients Booked</div>
+      <div class="stat-value green" id="stat-booked">—</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Available Slots</div>
+      <div class="stat-value cyan" id="stat-slots">—</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Current Step</div>
+      <div class="stat-value accent" id="stat-step">—</div>
+    </div>
+  </div>
+
+  <!-- CONTROLS -->
+  <div class="control-bar">
+    <button class="btn btn-primary" id="btn-reset" onclick="resetEnv()">🔄 Reset Environment</button>
+    <button class="btn btn-success" id="btn-baseline" onclick="runBaseline()">🤖 Run Baseline Agent</button>
+    <button class="btn btn-amber" id="btn-grade" onclick="getGrades()">📊 Grade Tasks</button>
+    <button class="btn btn-ghost" onclick="window.open('/docs','_blank')">📖 API Docs</button>
+    <div style="flex:1"></div>
+    <div class="step-counter-inline">
+      <span>Episode:</span>
+      <strong id="episode-status">Not started</strong>
+    </div>
+  </div>
+
+  <!-- MAIN LAYOUT -->
+  <div class="main-grid">
+    <!-- LEFT: Doctors + Log -->
+    <div style="display:flex;flex-direction:column;gap:20px;">
+      <!-- DOCTOR SLOTS -->
+      <div class="panel">
+        <div class="panel-header">
+          <div class="panel-title">👨‍⚕️ Doctor Availability</div>
+        </div>
+        <div class="panel-body">
+          <div class="doctors-grid" id="doctors-grid">
+            <div style="color:var(--text-dim);font-size:0.85rem;">Click <b>Reset</b> to start an episode</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- TASK SCORES -->
+      <div class="panel">
+        <div class="panel-header">
+          <div class="panel-title">🎯 Task Scores</div>
+        </div>
+        <div class="panel-body">
+          <div class="scores-grid" id="scores-grid">
+            <div class="score-row">
+              <span class="score-label" style="color:var(--green)">Task 1</span>
+              <div class="score-bar-bg"><div class="score-bar-fill t1" id="bar-t1" style="width:0%"></div></div>
+              <span class="score-value" id="score-t1">—</span>
+            </div>
+            <div class="score-row">
+              <span class="score-label" style="color:var(--amber)">Task 2</span>
+              <div class="score-bar-bg"><div class="score-bar-fill t2" id="bar-t2" style="width:0%"></div></div>
+              <span class="score-value" id="score-t2">—</span>
+            </div>
+            <div class="score-row">
+              <span class="score-label" style="color:var(--accent)">Task 3</span>
+              <div class="score-bar-bg"><div class="score-bar-fill t3" id="bar-t3" style="width:0%"></div></div>
+              <span class="score-value" id="score-t3">—</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ACTION LOG -->
+      <div class="panel">
+        <div class="panel-header">
+          <div class="panel-title">📋 Action Log</div>
+          <button class="btn btn-ghost" style="padding:6px 12px;font-size:0.72rem;" onclick="clearLog()">Clear</button>
+        </div>
+        <div class="panel-body">
+          <div class="log-area" id="log-area">
+            <div class="log-entry info">System ready. Click Reset to begin.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- RIGHT SIDEBAR -->
+    <div class="sidebar">
+      <!-- ACTION FORM -->
+      <div class="panel">
+        <div class="panel-header">
+          <div class="panel-title">⚡ Take Action</div>
+        </div>
+        <div class="panel-body">
+          <div class="action-form">
+            <div class="form-group">
+              <label>Action Type</label>
+              <select id="action-type">
+                <option value="book">📅 Book Appointment</option>
+                <option value="reschedule">🔄 Reschedule</option>
+                <option value="cancel">❌ Cancel</option>
+                <option value="waitlist">⏳ Waitlist</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>Patient ID</label>
+              <select id="action-patient"></select>
+            </div>
+            <div class="form-group" id="doctor-group">
+              <label>Doctor ID</label>
+              <select id="action-doctor"></select>
+            </div>
+            <div class="form-group" id="slot-group">
+              <label>Slot ID</label>
+              <select id="action-slot">
+                <option value="0">Slot 0 (9:00 AM)</option>
+                <option value="1">Slot 1 (10:00 AM)</option>
+                <option value="2">Slot 2 (11:00 AM)</option>
+                <option value="3">Slot 3 (12:00 PM)</option>
+                <option value="4">Slot 4 (1:00 PM)</option>
+              </select>
+            </div>
+            <button class="btn btn-primary" style="width:100%;justify-content:center;" id="btn-step" onclick="stepEnv()" disabled>
+              🚀 Execute Action
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- PATIENTS -->
+      <div class="panel">
+        <div class="panel-header">
+          <div class="panel-title">🧑‍🤝‍🧑 Patients</div>
+          <span style="font-size:0.7rem;color:var(--text-dim);" id="patient-count">0 total</span>
+        </div>
+        <div class="panel-body">
+          <div class="patients-list" id="patients-list">
+            <div style="color:var(--text-dim);font-size:0.82rem;">No data yet</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <footer>
+    Built with ❤️ for the <a href="https://openenv.org">OpenEnv</a> Hackathon &mdash;
+    Healthcare Appointment Scheduling RL Environment &mdash;
+    <a href="/docs">API Docs</a> &bull; <a href="/redoc">ReDoc</a>
+  </footer>
+</div>
+
+<div class="toast-container" id="toast-container"></div>
+
+<script>
+  const API = '';  // same origin
+  const DOCTOR_NAMES = ['Dr. Patel', 'Dr. Sharma', 'Dr. Gupta'];
+  const DOCTOR_SPECS = ['General Medicine', 'Internal Medicine', 'Pediatrics'];
+  const SLOT_TIMES = ['9:00 AM', '10:00 AM', '11:00 AM', '12:00 PM', '1:00 PM'];
+  const PRIORITY_LABELS = { 1: 'High', 2: 'Medium', 3: 'Low' };
+  const PRIORITY_CLASSES = { 1: 'priority-high', 2: 'priority-medium', 3: 'priority-low' };
+
+  let envState = null;
+  let isDone = false;
+
+  // Toast
+  function showToast(msg, type = 'info') {
+    const tc = document.getElementById('toast-container');
+    const t = document.createElement('div');
+    t.className = `toast ${type}`;
+    t.textContent = msg;
+    tc.appendChild(t);
+    setTimeout(() => t.remove(), 3000);
+  }
+
+  // Log
+  function addLog(msg, type = '') {
+    const area = document.getElementById('log-area');
+    const entry = document.createElement('div');
+    entry.className = `log-entry ${type}`;
+    const time = new Date().toLocaleTimeString();
+    entry.textContent = `[${time}] ${msg}`;
+    area.appendChild(entry);
+    area.scrollTop = area.scrollHeight;
+  }
+  function clearLog() {
+    document.getElementById('log-area').innerHTML = '';
+  }
+
+  // Update UI
+  function updateUI(obs) {
+    if (!obs) return;
+    envState = obs;
+
+    // Stats
+    let waiting = 0, booked = 0, totalSlots = 0;
+    const patients = obs.patients || {};
+    Object.values(patients).forEach(p => {
+      if (p.status === 'waiting') waiting++;
+      if (p.status === 'booked') booked++;
+    });
+    const doctorSlots = obs.doctor_slots || {};
+    Object.values(doctorSlots).forEach(slots => {
+      slots.forEach(s => { if (s) totalSlots++; });
+    });
+
+    document.getElementById('stat-waiting').textContent = waiting;
+    document.getElementById('stat-booked').textContent = booked;
+    document.getElementById('stat-slots').textContent = totalSlots;
+    document.getElementById('stat-step').textContent = obs.current_step || 0;
+    document.getElementById('episode-status').textContent = isDone ? '✅ Done' : `Step ${obs.current_step || 0}`;
+    document.getElementById('btn-step').disabled = isDone;
+
+    // Doctors
+    const dg = document.getElementById('doctors-grid');
+    dg.innerHTML = '';
+    Object.entries(doctorSlots).forEach(([did, slots]) => {
+      const idx = parseInt(did);
+      const card = document.createElement('div');
+      card.className = 'doctor-card';
+      card.innerHTML = `
+        <div class="doctor-name">
+          <span style="font-size:1.2rem;">👨‍⚕️</span>
+          ${DOCTOR_NAMES[idx] || 'Doctor ' + did}
+        </div>
+        <div class="doctor-specialty">${DOCTOR_SPECS[idx] || 'Specialist'}</div>
+        <div class="slots-grid">
+          ${slots.map((avail, si) => `
+            <div class="slot ${avail ? 'available' : 'booked'}"
+              title="${avail ? 'Available' : 'Booked'} — ${SLOT_TIMES[si]}"
+              onclick="${avail && !isDone ? `quickBook(${did}, ${si})` : ''}">
+              ${si}
+            </div>
+          `).join('')}
+        </div>
+        <div class="slot-times">
+          ${SLOT_TIMES.map(t => `<div class="slot-label">${t.replace(':00 ','')}</div>`).join('')}
+        </div>
+      `;
+      dg.appendChild(card);
+    });
+
+    // Patients
+    const pl = document.getElementById('patients-list');
+    pl.innerHTML = '';
+    const sorted = Object.values(patients).sort((a, b) => a.priority - b.priority);
+    sorted.forEach(p => {
+      const pid = p.id !== undefined ? p.id : '?';
+      const row = document.createElement('div');
+      row.className = `patient-row ${PRIORITY_CLASSES[p.priority] || ''}`;
+      row.onclick = () => {
+        document.getElementById('action-patient').value = pid;
+        document.querySelectorAll('.patient-row').forEach(r => r.classList.remove('selected'));
+        row.classList.add('selected');
+      };
+      const statusClass = p.status === 'booked' ? 'status-booked' : p.status === 'cancelled' ? 'status-cancelled' : 'status-waiting';
+      let meta = `Priority: ${PRIORITY_LABELS[p.priority] || p.priority} • Prefers: ${DOCTOR_NAMES[p.preferred_doctor] || 'Dr ' + p.preferred_doctor}`;
+      if (p.status === 'booked') {
+        meta += ` • Booked: ${DOCTOR_NAMES[p.booked_doctor] || 'Dr ' + p.booked_doctor} @ ${SLOT_TIMES[p.booked_slot] || 'Slot ' + p.booked_slot}`;
+      }
+      row.innerHTML = `
+        <div class="patient-avatar">P${pid}</div>
+        <div class="patient-info">
+          <div class="patient-name">Patient ${pid}</div>
+          <div class="patient-meta">${meta}</div>
+        </div>
+        <div class="patient-status ${statusClass}">${p.status}</div>
+      `;
+      pl.appendChild(row);
+    });
+    document.getElementById('patient-count').textContent = `${Object.keys(patients).length} total`;
+
+    // Patient dropdown
+    const patientSelect = document.getElementById('action-patient');
+    const currentVal = patientSelect.value;
+    patientSelect.innerHTML = '';
+    sorted.forEach(p => {
+      const opt = document.createElement('option');
+      opt.value = p.id;
+      opt.textContent = `Patient ${p.id} (${PRIORITY_LABELS[p.priority] || ''} — ${p.status})`;
+      patientSelect.appendChild(opt);
+    });
+    if (currentVal && patientSelect.querySelector(`option[value="${currentVal}"]`)) {
+      patientSelect.value = currentVal;
+    }
+
+    // Doctor dropdown
+    const doctorSelect = document.getElementById('action-doctor');
+    doctorSelect.innerHTML = '';
+    Object.keys(doctorSlots).forEach(did => {
+      const opt = document.createElement('option');
+      opt.value = did;
+      opt.textContent = `${DOCTOR_NAMES[parseInt(did)] || 'Doctor ' + did} (ID: ${did})`;
+      doctorSelect.appendChild(opt);
+    });
+  }
+
+  function updateScores(scores) {
+    if (!scores) return;
+    const t1 = scores.task_1 || 0, t2 = scores.task_2 || 0, t3 = scores.task_3 || 0;
+    document.getElementById('score-t1').textContent = (t1 * 100).toFixed(0) + '%';
+    document.getElementById('score-t2').textContent = (t2 * 100).toFixed(0) + '%';
+    document.getElementById('score-t3').textContent = (t3 * 100).toFixed(0) + '%';
+    document.getElementById('bar-t1').style.width = (t1 * 100) + '%';
+    document.getElementById('bar-t2').style.width = (t2 * 100) + '%';
+    document.getElementById('bar-t3').style.width = (t3 * 100) + '%';
+  }
+
+  // Show/hide doctor & slot fields based on action type
+  document.getElementById('action-type').addEventListener('change', function() {
+    const t = this.value;
+    document.getElementById('doctor-group').style.display = (t === 'cancel' || t === 'waitlist') ? 'none' : 'block';
+    document.getElementById('slot-group').style.display = (t === 'cancel' || t === 'waitlist') ? 'none' : 'block';
+  });
+
+  // Quick book from slot click
+  function quickBook(doctorId, slotId) {
+    document.getElementById('action-type').value = 'book';
+    document.getElementById('action-doctor').value = doctorId;
+    document.getElementById('action-slot').value = slotId;
+    document.getElementById('action-type').dispatchEvent(new Event('change'));
+    showToast(`Selected: ${DOCTOR_NAMES[doctorId]} @ ${SLOT_TIMES[slotId]}`, 'info');
+  }
+
+  // API Calls
+  async function resetEnv() {
+    try {
+      addLog('Resetting environment...', 'info');
+      const res = await fetch(API + '/reset', { method: 'POST' });
+      const data = await res.json();
+      isDone = false;
+      updateUI(data.observation);
+      document.getElementById('btn-step').disabled = false;
+      // Reset scores
+      ['t1','t2','t3'].forEach(t => {
+        document.getElementById('score-' + t).textContent = '—';
+        document.getElementById('bar-' + t).style.width = '0%';
+      });
+      addLog('Environment reset. Episode started!', 'success');
+      showToast('Environment reset successfully', 'success');
+    } catch (e) {
+      addLog('Reset failed: ' + e.message, 'error');
+      showToast('Reset failed', 'error');
+    }
+  }
+
+  async function stepEnv() {
+    const type = document.getElementById('action-type').value;
+    const patient_id = parseInt(document.getElementById('action-patient').value);
+    const doctor_id = parseInt(document.getElementById('action-doctor').value);
+    const slot_id = parseInt(document.getElementById('action-slot').value);
+
+    const body = { type, patient_id };
+    if (type === 'book' || type === 'reschedule') {
+      body.doctor_id = doctor_id;
+      body.slot_id = slot_id;
+    }
+
+    try {
+      addLog(`Action: ${type} | Patient ${patient_id}${body.doctor_id !== undefined ? ' → Dr ' + doctor_id + ' Slot ' + slot_id : ''}`, 'info');
+      const res = await fetch(API + '/step', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
+      });
+      const data = await res.json();
+      isDone = data.done;
+      updateUI(data.observation);
+
+      const reward = data.reward;
+      const infoStr = data.info.status || data.info.error || JSON.stringify(data.info);
+      if (reward >= 0) {
+        addLog(`✅ Result: ${infoStr} | Reward: +${reward.toFixed(2)}`, 'success');
+        showToast(`Action succeeded! Reward: +${reward.toFixed(2)}`, 'success');
+      } else {
+        addLog(`❌ Result: ${infoStr} | Reward: ${reward.toFixed(2)}`, 'error');
+        showToast(`Action failed: ${infoStr}`, 'error');
+      }
+      if (isDone) {
+        addLog('🏁 Episode finished!', 'info');
+        showToast('Episode complete! Check grades.', 'info');
+        getGrades();
+      }
+    } catch (e) {
+      addLog('Step failed: ' + e.message, 'error');
+      showToast('Step failed', 'error');
+    }
+  }
+
+  async function getGrades() {
+    try {
+      addLog('Fetching task grades...', 'info');
+      const res = await fetch(API + '/grader');
+      const data = await res.json();
+      updateScores(data.task_scores);
+      addLog(`Grades — T1: ${(data.task_scores.task_1*100).toFixed(0)}% | T2: ${(data.task_scores.task_2*100).toFixed(0)}% | T3: ${(data.task_scores.task_3*100).toFixed(0)}%`, 'success');
+      showToast('Grades updated', 'success');
+    } catch (e) {
+      addLog('Grading failed: ' + e.message, 'error');
+      showToast('Grading failed', 'error');
+    }
+  }
+
+  async function runBaseline() {
+    try {
+      addLog('Running baseline agent...', 'info');
+      showToast('Running baseline agent...', 'info');
+      const res = await fetch(API + '/baseline');
+      const data = await res.json();
+      isDone = true;
+      // Fetch latest state
+      const stateRes = await fetch(API + '/state');
+      const stateData = await stateRes.json();
+      updateUI(stateData.state);
+      updateScores(data.task_scores);
+      addLog(`Baseline done — T1: ${(data.task_scores.task_1*100).toFixed(0)}% | T2: ${(data.task_scores.task_2*100).toFixed(0)}% | T3: ${(data.task_scores.task_3*100).toFixed(0)}%`, 'success');
+      showToast('Baseline agent finished!', 'success');
+      document.getElementById('episode-status').textContent = '✅ Done (Baseline)';
+      document.getElementById('btn-step').disabled = true;
+    } catch (e) {
+      addLog('Baseline failed: ' + e.message, 'error');
+      showToast('Baseline failed', 'error');
+    }
+  }
+</script>
+
+</body>
+</html>
