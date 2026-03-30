@@ -5,14 +5,40 @@ from app.tasks import TASKS, TaskGrader
 from app.models import Action, StepResponse, ResetResponse, StateResponse, TaskResponse, GraderResponse, BaselineResponse
 from typing import List, Dict, Any
 
-app = FastAPI(title="Healthcare Appointment Scheduling RL Environment")
+DESCRIPTION = """
+## OpenEnv Environment HTTP API
+
+HTTP API for interacting with OpenEnv environments through a standardized interface.
+
+### Features
+- **Environment Reset**: Initialize or restart episodes
+- **Action Execution**: Send actions and receive observations
+- **State Inspection**: Query current environment state
+- **Schema Access**: Retrieve JSON schemas for actions and observations
+
+### Workflow
+1. Call `/reset` to start a new episode and get initial observation
+2. Call `/step` repeatedly with actions to interact with environment
+3. Episode ends when observation returns `done: true`
+4. Call `/state` anytime to inspect current environment state
+
+### Documentation
+- **Swagger UI**: Available at `/docs`
+- **ReDoc**: Available at `/redoc`
+- **OpenAPI Schema**: Available at `/openapi.json`
+
+[OpenEnv Team - Website](https://openenv.org) | BSD-3-Clause
+"""
+
+app = FastAPI(
+    title="OpenEnv Environment HTTP API",
+    version="1.0.0",
+    description=DESCRIPTION,
+    docs_url="/",
+)
 
 # Global environment instance
 env = HealthcareEnv()
-
-@app.get("/")
-def read_root():
-    return {"message": "Healthcare Appointment Scheduling RL Environment API"}
 
 @app.api_route("/reset", methods=["GET", "POST"], response_model=ResetResponse)
 def reset_env():
