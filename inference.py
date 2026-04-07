@@ -66,39 +66,54 @@ Reply with only the JSON object:"""
         return {"type": "waitlist", "patient_id": p_id, "doctor_id": 0, "slot_id": 0}
 
 def run_inference():
-    print("Starting OpenEnv LLM Inference...")
+    """
+    Runs LLM-based inference on the Healthcare Scheduling environment
+    and prints structured [START]/[STEP]/[END] output required by the OpenEnv validator.
+    """
+    # Define the tasks we will report on
+    task_defs = [
+        {"name": "Book an Appointment",       "grader": "grade_task_1"},
+        {"name": "Handle Scheduling Conflicts", "grader": "grade_task_2"},
+        {"name": "Priority Scheduling",        "grader": "grade_task_3"},
+    ]
+
     env = HealthcareEnv()
     obs = env.reset()
-    print("Environment reset complete.")
 
-    steps = 0
-    total_reward = 0
+    # ---------- Run the agent loop ----------
+    step_num = 0
+    cumulative_reward = 0.0
+    step_log = []  # collect (step, reward) for each step
 
-    while not env.done and steps < 20:
-        print(f"\n--- Step {steps + 1} ---")
+    while not env.done and step_num < 20:
         action = get_action_from_llm(obs)
-        print(f"Action Chosen: {action}")
-        
         obs, reward, done, info = env.step(action)
-        print(f"Reward: {reward}, Done: {done}")
-        if "error" in info:
-            print(f"Info Error: {info['error']}")
-            
-        total_reward += reward
-        steps += 1
+        cumulative_reward += reward
+        step_num += 1
+        step_log.append((step_num, reward))
 
-    print("\n" + "="*30)
-    print(f"Inference finished in {steps} steps.")
-    print(f"Total Cumulative Reward: {total_reward:.2f}")
-
+    # ---------- Grade ----------
     grader = TaskGrader(env)
-    scores = {
-        "task_1": grader.grade_task_1(),
-        "task_2": grader.grade_task_2(),
-        "task_3": grader.grade_task_3()
-    }
-    print(f"Final Task Scores: {scores}")
-    print("="*30)
+
+    # ---------- Emit structured output per task ----------
+    for task_def in task_defs:
+        task_name = task_def["name"]
+        grade_fn = getattr(grader, task_def["grader"])
+        task_score = grade_fn()
+
+        # [START] block
+        print(f"[START] task={task_name}", flush=True)
+
+        # [STEP] blocks — replay the step log for each task
+        for s, r in step_log:
+            print(f"[STEP] step={s} reward={r}", flush=True)
+
+        # [END] block
+        print(f"[END] task={task_name} score={task_score:.4f} steps={step_num}", flush=True)
+
+    # Also print a human-readable summary (after structured blocks)
+    print(f"\nInference finished in {step_num} steps.", flush=True)
+    print(f"Total Cumulative Reward: {cumulative_reward:.2f}", flush=True)
     sys.exit(0)
 
 if __name__ == "__main__":
