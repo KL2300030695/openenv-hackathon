@@ -9,19 +9,10 @@ MANDATORY
 
 - Uses OpenAI Client for all LLM calls.
 
-STDOUT FORMAT (exact spec):
+STDOUT FORMAT (exact official spec):
     [START] task=<task_name> env=<benchmark> model=<model_name>
     [STEP]  step=<n> action=<action_str> reward=<0.00> done=<true|false> error=<msg|null>
     [END]   success=<true|false> steps=<n> rewards=<r1,r2,...,rn>
-
-Rules:
-    - One [START] line at episode begin.
-    - One [STEP] line per step, immediately after env.step() returns.
-    - One [END] line after episode ends, always emitted (even on exception).
-    - reward and rewards are formatted to 2 decimal places.
-    - done and success are lowercase booleans: true or false.
-    - error is the raw last_action_error string, or null if none.
-    - All fields on a single line with no newlines within a line.
 """
 
 import os
@@ -53,26 +44,27 @@ MAX_STEPS = 20
 client = OpenAI(base_url=API_BASE_URL, api_key=HF_TOKEN)
 
 
-# ── Structured logging helpers (match PASSING submission format) ────
-def log_start(task: str) -> None:
+# ── Structured logging helpers (EXACT official spec format) ─────────
+def log_start(task: str, env: str, model: str) -> None:
     """Emit [START] line at episode begin."""
-    print(f"[START] task={task}", flush=True)
+    print(f"[START] task={task} env={env} model={model}", flush=True)
 
 
-def log_step(step: int, action: str, reward: float) -> None:
+def log_step(step: int, action: str, reward: float, done: bool, error: Optional[str]) -> None:
     """Emit [STEP] line immediately after env.step() returns."""
+    error_val = error if error else "null"
+    done_val = str(done).lower()
     print(
-        f"[STEP] step={step} action={action} reward={reward:.2f}",
+        f"[STEP] step={step} action={action} reward={reward:.2f} done={done_val} error={error_val}",
         flush=True,
     )
 
 
-def log_end(task: str, score: float, steps: int) -> None:
+def log_end(success: bool, steps: int, rewards: List[float]) -> None:
     """Emit [END] line after episode ends."""
-    # Score MUST be strictly between 0 and 1
-    score = min(max(float(score), 0.01), 0.99)
+    rewards_str = ",".join(f"{r:.2f}" for r in rewards)
     print(
-        f"[END] task={task} score={score} steps={steps}",
+        f"[END] success={str(success).lower()} steps={steps} rewards={rewards_str}",
         flush=True,
     )
 
@@ -280,17 +272,20 @@ def run_inference():
         task_name = task_def["name"]
         grade_fn = getattr(grader, task_def["grader"])
         task_score = min(max(grade_fn(), 0.01), 0.99)  # strictly between (0, 1)
+        success = task_score > 0.0
 
-        log_start(task=task_name)
+        log_start(task=task_name, env=BENCHMARK, model=MODEL_NAME)
 
         for i in range(steps_taken):
             log_step(
                 step=i + 1,
                 action=actions[i],
                 reward=rewards[i],
+                done=dones[i],
+                error=errors[i],
             )
 
-        log_end(task=task_name, score=task_score, steps=steps_taken)
+        log_end(success=success, steps=steps_taken, rewards=rewards)
 
     sys.exit(0)
 
