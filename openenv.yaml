@@ -7,12 +7,6 @@ tags:
   - healthcare
   - scheduling
   - rl
-  - fastapi
+  - text-based
 entrypoint: "server.app:app"
 supports_concurrent_sessions: true
-# Standard OpenEnv space fields
-spec_version: 1
-type: space
-runtime: fastapi
-app: server.app:app
-port: 7860

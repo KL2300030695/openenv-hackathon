@@ -9,21 +9,9 @@ import random
 from typing import Any, Dict, List, Optional
 from uuid import uuid4
 
-# ── OpenEnv base classes (correct import path matching passing submissions) ──
-try:
-    from openenv.core.env_server import Environment
-except ImportError:
-    try:
-        from openenv.core.env_server.interfaces import Environment
-    except ImportError:
-        class Environment:
-            """Minimal Environment stub when openenv-core is not installed."""
-            SUPPORTS_CONCURRENT_SESSIONS = False
+from openenv.core.env_server import Environment
+from models import HealthcareAction, HealthcareObservation, HealthcareState
 
-try:
-    from models import HealthcareAction, HealthcareObservation, HealthcareState
-except ImportError:
-    from .models import HealthcareAction, HealthcareObservation, HealthcareState
 
 
 class HealthcareEnvironment(Environment):

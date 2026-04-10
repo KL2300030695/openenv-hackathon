@@ -1,36 +1,11 @@
 """
 Data models for the Healthcare Scheduling Environment.
-
-Uses OpenEnv base types for framework compatibility.
-Fallback to plain Pydantic if openenv-core is not installed.
 """
 
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, List, Optional, Union, Literal
 
-from pydantic import BaseModel, Field
-
-# ── OpenEnv base types (correct import path matching passing submissions) ──
-try:
-    from openenv.core.env_server import Action, Observation, State
-except ImportError:
-    try:
-        from openenv.core.env_server.types import Action, Observation
-        from openenv.core.env_server.types import State
-    except ImportError:
-        # Fallback: define minimal base classes so the env still works standalone
-        class Action(BaseModel):
-            """Base action class (fallback when openenv-core is not installed)."""
-            pass
-
-        class Observation(BaseModel):
-            """Base observation class (fallback when openenv-core is not installed)."""
-            done: bool = False
-            reward: float = 0.0
-
-        class State(BaseModel):
-            """Base state class (fallback when openenv-core is not installed)."""
-            episode_id: str = ""
-            step_count: int = 0
+from pydantic import Field
+from openenv.core.env_server import Action, Observation, State
 
 
 # ── Environment Action ────────────────────────────────────────────────
@@ -59,30 +34,12 @@ class HealthcareAction(Action):
 class HealthcareObservation(Observation):
     """Observation from the Healthcare Scheduling environment."""
 
-    doctor_slots: Optional[Dict[str, List[bool]]] = Field(
-        default=None,
-        description="Availability of each doctor for each time slot (True = available)",
-    )
-    patients: Optional[Dict[str, Dict[str, Any]]] = Field(
-        default=None,
-        description="Patient information: priority, preferred doctor, status",
-    )
-    waiting_queue: Optional[List[str]] = Field(
-        default=None,
-        description="List of patient IDs currently waiting",
-    )
-    current_step: Optional[int] = Field(
-        default=None,
-        description="Current step number in the episode",
-    )
-    info: Optional[Dict[str, Any]] = Field(
-        default=None,
-        description="Additional info (errors, status messages)",
-    )
-    score: Optional[float] = Field(
-        default=None,
-        description="Current score for the episode",
-    )
+    doctor_slots: Optional[Dict[str, List[bool]]] = None
+    patients: Optional[Dict[str, Dict[str, Any]]] = None
+    waiting_queue: Optional[List[str]] = None
+    current_step: Optional[int] = None
+    info: Optional[Dict[str, Any]] = None
+    score: Optional[float] = None
 
 
 # ── Environment State ────────────────────────────────────────────────
@@ -90,35 +47,3 @@ class HealthcareState(State):
     """Custom state for the Healthcare Scheduling environment."""
     difficulty: str = "easy"
     score: float = 0.01
-
-
-# ── API Response Models (for FastAPI endpoint compatibility) ──────────
-class StepResponse(BaseModel):
-    observation: Dict[str, Any]
-    reward: float
-    done: bool
-    info: Dict[str, Any]
-
-
-class ResetResponse(BaseModel):
-    observation: Dict[str, Any]
-    info: Dict[str, Any] = {}
-
-
-class StateResponse(BaseModel):
-    state: Dict[str, Any]
-
-
-class TaskResponse(BaseModel):
-    name: str
-    difficulty: str
-    description: str
-
-
-class GraderResponse(BaseModel):
-    task_scores: Dict[str, float]
-
-
-class BaselineResponse(BaseModel):
-    task_scores: Dict[str, float]
-    observations: List[Dict[str, Any]]
