@@ -7,78 +7,164 @@ sdk: docker
 pinned: false
 ---
 
-# Healthcare Appointment Scheduling RL Environment
+# Healthcare Appointment Scheduling — OpenEnv Environment
 
-This project implements a complete OpenEnv-compatible reinforcement learning environment simulating a real-world hospital appointment booking system.
+An OpenEnv-compatible reinforcement learning environment simulating a real-world hospital appointment booking system. The environment exposes scheduling tasks through the standard OpenEnv `reset()`/`step()`/`state()` interface.
+
+## Quick Start
+
+### Docker (Recommended)
+
+```bash
+cd Meta_Hackathon
+docker build -t healthcare-scheduling:latest .
+docker run --rm -p 7860:7860 healthcare-scheduling:latest
+```
+
+Verify the server is healthy:
+
+```bash
+curl http://localhost:7860/health
+```
+
+Expected response:
+
+```json
+{"status": "healthy", "service": "healthcare_scheduling"}
+```
+
+### Without Docker
+
+```bash
+pip install -r requirements.txt
+uvicorn server.app:app --host 0.0.0.0 --port 7860
+```
+
+### Deploy to Hugging Face Spaces
+
+```bash
+openenv push
+```
+
+Or specify options:
+
+```bash
+openenv push --namespace my-org --private
+```
 
 ## Environment Design
 
-The environment simulates a hospital with multiple doctors and patients. The goal is to efficiently schedule appointments while considering patient priorities, doctor availability, and patient preferences.
+The environment simulates a hospital with **3 doctors × 5 time slots** and **10 patients** with varying priorities. The agent's goal is to efficiently schedule appointments while respecting constraints.
 
 ### Observation Space
-The state is a dictionary containing:
-- `doctor_slots`: Availability of each doctor for each time slot.
-- `patients`: Information about patients (priority, preferred doctor, status).
-- `waiting_queue`: List of patient IDs currently waiting for an appointment.
+
+`HealthcareObservation` contains:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `doctor_slots` | `Dict[str, List[bool]]` | Availability per doctor per slot (True = free) |
+| `patients` | `Dict[str, Dict]` | Patient info: priority, preferred doctor, status |
+| `waiting_queue` | `List[str]` | Patient IDs currently awaiting appointment |
+| `current_step` | `int` | Current step number |
 
 ### Action Space
-Actions are dictionaries:
-- `type`: "book", "reschedule", "cancel", or "waitlist".
-- `patient_id`: ID of the patient.
-- `doctor_id`: ID of the doctor (required for "book" and "reschedule").
-- `slot_id`: ID of the time slot (required for "book" and "reschedule").
+
+`HealthcareAction` fields:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `type` | `str` | `"book"`, `"reschedule"`, `"cancel"`, or `"waitlist"` |
+| `patient_id` | `int` | ID of the target patient |
+| `doctor_id` | `int` | ID of the doctor (for book/reschedule) |
+| `slot_id` | `int` | ID of the time slot (for book/reschedule) |
 
 ### Reward Function
-- **+1.0**: Successful booking.
-- **+0.2 bonus**: Booking with preferred doctor.
-- **+0.3**: Waitlisting a patient (partial progress).
-- **-1.0**: Conflicts (trying to book an occupied slot) or invalid actions.
-- **-0.2**: Cancellations.
-- **+0.5**: Successful rescheduling.
+
+| Action | Reward | Condition |
+|--------|--------|-----------|
+| Book | **+1.0** | Successful booking |
+| Book (preferred) | **+1.2** | Booking with preferred doctor |
+| Reschedule | **+0.5** | Successful reschedule |
+| Waitlist | **+0.3** | Partial progress |
+| Cancel | **-0.2** | Cancellation |
+| Invalid/Conflict | **-1.0** | Bad action |
 
 ## Tasks & Grading
 
-1.  **Task 1 (Easy)**: Successfully book an appointment when slots are available.
-2.  **Task 2 (Medium)**: Handle scheduling conflicts and rescheduling efficiently.
-3.  **Task 3 (Hard)**: Optimize scheduling for multiple patients with different priorities (Priority 1 > Priority 2 > Priority 3).
+| Task | Difficulty | Description | Score Range |
+|------|-----------|-------------|-------------|
+| Task 1 | Easy | Successfully book appointments | 0.0 – 1.0 |
+| Task 2 | Medium | Handle conflicts and rescheduling | 0.0 – 1.0 |
+| Task 3 | Hard | Priority-based scheduling (1 > 2 > 3) | 0.0 – 1.0 |
 
-The `/grader` endpoint returns a score between 0.0 and 1.0 for each task based on efficiency and priority fulfillment.
+## Client Usage
 
-## Setup & Usage
+### Python (sync)
 
-### Local Development
+```python
+from client import HealthcareEnvClient
+from app.models import HealthcareAction
 
-1.  Clone the repository.
-2.  Install dependencies:
-    ```bash
-    pip install -r requirements.txt
-    ```
-3.  Run the FastAPI server:
-    ```bash
-    python app/main.py
-    ```
-4.  The API will be available at `http://localhost:7860`.
+with HealthcareEnvClient(base_url="http://localhost:7860") as env:
+    result = env.reset()
+    print(result)
 
-### Running with Docker
-
-```bash
-docker build -t healthcare-rl-env .
-docker run -p 7860:7860 healthcare-rl-env
+    result = env.step(HealthcareAction(
+        type="book",
+        patient_id=0,
+        doctor_id=1,
+        slot_id=2
+    ))
+    print(result)
 ```
-
-### Deployment
-
-This environment is fully compatible with Hugging Face Spaces. Simply upload the files to a Space and select "Docker" configuration.
 
 ## API Endpoints
 
--   `GET /`: Root endpoint.
--   `POST /reset`: Resets the environment.
--   `POST /step`: Performs an action.
--   `GET /state`: Gets current state.
--   `GET /tasks`: Lists all available tasks.
--   `GET /grader`: Returns scores for each task.
--   `GET /baseline`: Runs a rule-based baseline agent and returns its performance.
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/health` | Container health check |
+| `POST` | `/reset` | Reset environment, get initial observation |
+| `POST` | `/step` | Execute action, get next observation |
+| `GET` | `/state` | Get current environment state |
+| `GET` | `/schema` | Action/Observation JSON schemas |
+| `GET` | `/tasks` | List task definitions |
+| `GET` | `/grader` | Get grading scores |
+| `GET` | `/baseline` | Run baseline agent |
+| `GET` | `/docs` | Swagger/OpenAPI docs |
+| `WS` | `/ws` | WebSocket for persistent sessions |
+
+## Project Structure
+
+```
+healthcare_scheduling/
+├── openenv.yaml          # OpenEnv manifest (spec_version: 1)
+├── pyproject.toml         # Dependencies and package config
+├── requirements.txt       # Docker build dependencies
+├── Dockerfile             # Container image definition
+├── client.py              # EnvClient for remote access
+├── inference.py           # LLM inference script
+├── test_env.py            # Verification script
+├── app/
+│   ├── __init__.py        # Package exports
+│   ├── models.py          # HealthcareAction, HealthcareObservation
+│   ├── env.py             # HealthcareEnvironment (OpenEnv interface)
+│   ├── agent.py           # Baseline rule-based agent
+│   └── tasks.py           # Task definitions and grader
+├── server/
+│   ├── __init__.py
+│   └── app.py             # FastAPI app via create_app()
+└── static/
+    └── index.html         # Web frontend
+```
+
+## Running Inference
+
+```bash
+export HF_TOKEN=your_token_here
+python inference.py
+```
+
+The script outputs structured `[START]`/`[STEP]`/`[END]` blocks for each task.
 
 ## License
 

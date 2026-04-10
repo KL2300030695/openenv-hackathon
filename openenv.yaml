@@ -1,42 +1,6 @@
-version: "1.0"
-metadata:
-  name: "Healthcare Appointment Scheduling"
-  description: "A reinforcement learning environment simulating a hospital appointment booking system."
-  version: "1.0.0"
-  author: "Antigravity AI"
-  tags: ["healthcare", "scheduling", "optimization", "RL"]
-  inference_script: "inference.py"
-
-environment:
-  type: "discrete"
-  observation_space:
-    type: "dict"
-    description: "Contains doctor slots, patient info, and waiting queue."
-  action_space:
-    type: "dict"
-    description: "Actions include book, reschedule, cancel, and waitlist."
-
-endpoints:
-  reset: "/reset"
-  step: "/step"
-  state: "/state"
-  tasks: "/tasks"
-  grader: "/grader"
-  baseline: "/baseline"
-
-tasks:
-  - id: task_1
-    name: "Book an Appointment"
-    difficulty: easy
-    description: "Successfully book an appointment when slots are available."
-    score_range: [0.0, 1.0]
-  - id: task_2
-    name: "Handle Scheduling Conflicts"
-    difficulty: medium
-    description: "Handle scheduling conflicts and rescheduling efficiently."
-    score_range: [0.0, 1.0]
-  - id: task_3
-    name: "Priority Scheduling"
-    difficulty: hard
-    description: "Optimize scheduling for multiple patients with different priorities."
-    score_range: [0.0, 1.0]
+spec_version: 1
+name: healthcare_scheduling
+type: space
+runtime: fastapi
+app: server.app:app
+port: 7860

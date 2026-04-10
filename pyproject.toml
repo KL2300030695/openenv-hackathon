@@ -1,24 +1,39 @@
 [build-system]
-requires = ["setuptools>=61.0"]
-build-backend = "setuptools.backends.legacy:build"
+requires = ["setuptools>=45", "wheel"]
+build-backend = "setuptools.build_meta"
 
 [project]
-name = "openenv-hackathon"
+name = "openenv-healthcare-scheduling"
 version = "1.0.0"
-description = "Healthcare Appointment Scheduling RL Environment"
+description = "Healthcare Appointment Scheduling RL Environment for OpenEnv"
 requires-python = ">=3.10"
 dependencies = [
-    "fastapi",
-    "uvicorn[standard]",
-    "pydantic",
-    "typing-extensions",
-    "openai",
     "openenv-core>=0.2.0",
+    "openenv>=0.1.13",
+    "fastapi>=0.110.0",
+    "uvicorn[standard]>=0.27.0",
+    "pydantic>=2.5.0",
+    "httpx>=0.25.2",
+    "requests>=2.32.5",
+    "websockets",
+    "openai",
+    "aiofiles",
+    "typing-extensions",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0.0",
+    "pytest-cov>=4.0.0",
 ]
 
 [project.scripts]
 server = "server.app:main"
 
-[tool.setuptools.packages.find]
-where = ["."]
-include = ["app*", "server*"]
+[tool.setuptools]
+include-package-data = true
+packages = ["app", "app.server", "server"]
+package-dir = { "app" = "app", "server" = "server" }
+
+[tool.setuptools.package-data]
+app = ["**/*.yaml", "**/*.yml", "**/*.md"]

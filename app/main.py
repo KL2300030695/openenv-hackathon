@@ -1,116 +1,78 @@
-from fastapi import FastAPI, HTTPException
-from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
-from app.env import HealthcareEnv
-from app.agent import BaselineAgent
-from app.tasks import TASKS, TaskGrader
-from app.models import Action, StepResponse, ResetResponse, StateResponse, TaskResponse, GraderResponse, BaselineResponse
-from typing import List, Dict, Any
-import os
+"""
+Main FastAPI application — backward-compatible entry point.
 
-DESCRIPTION = """
-## OpenEnv Environment HTTP API
-
-HTTP API for interacting with OpenEnv environments through a standardized interface.
-
-### Features
-- **Environment Reset**: Initialize or restart episodes
-- **Action Execution**: Send actions and receive observations
-- **State Inspection**: Query current environment state
-- **Schema Access**: Retrieve JSON schemas for actions and observations
-
-### Workflow
-1. Call `/reset` to start a new episode and get initial observation
-2. Call `/step` repeatedly with actions to interact with environment
-3. Episode ends when observation returns `done: true`
-4. Call `/state` anytime to inspect current environment state
-
-### Documentation
-- **Swagger UI**: Available at `/docs`
-- **ReDoc**: Available at `/redoc`
-- **OpenAPI Schema**: Available at `/openapi.json`
-
-[OpenEnv Team - Website](https://openenv.org) | BSD-3-Clause
+The primary server entry point is now ``server.app``, which uses the OpenEnv
+``create_app()`` factory.  This module re-exports the app for legacy
+``python app/main.py`` usage and adds the custom ``/tasks``, ``/grader``,
+and ``/baseline`` endpoints.
 """
 
-app = FastAPI(
-    title="OpenEnv Environment HTTP API",
-    version="1.0.0",
-    description=DESCRIPTION,
-)
+from __future__ import annotations
 
-# Serve static files
-STATIC_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "static")
-app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
+import os
+import sys
+from pathlib import Path
 
-# Global environment instance
-env = HealthcareEnv()
+# Ensure the project root is on sys.path
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
 
-@app.get("/", include_in_schema=False)
-def serve_frontend():
-    return FileResponse(os.path.join(STATIC_DIR, "index.html"))
+from server.app import app  # re-export the canonical app
 
-@app.api_route("/reset", methods=["GET", "POST"], response_model=ResetResponse)
-def reset_env():
-    obs = env.reset()
-    return {
-        "observation": obs,
-        "info": {}
-    }
+# ── Additional domain-specific endpoints ─────────────────────────────
+# These are NOT part of the OpenEnv spec but are useful for the hackathon
+# grader and for debugging.
 
-@app.post("/step", response_model=StepResponse)
-def step_env(action: Action):
-    # Convert Pydantic model to dict for environment handling
-    action_dict = action.model_dump() if hasattr(action, "model_dump") else action.dict()
-    obs, reward, done, info = env.step(action_dict)
-    return {
-        "observation": obs,
-        "reward": reward,
-        "done": done,
-        "info": info
-    }
+from app.env import HealthcareEnvironment
+from app.agent import BaselineAgent
+from app.tasks import TASKS, TaskGrader
 
-@app.get("/state", response_model=StateResponse)
-def get_state():
-    return {"state": env.state()}
+_env = HealthcareEnvironment()
 
-@app.get("/tasks", response_model=List[TaskResponse])
-def list_tasks():
-    return [task.__dict__ for task in TASKS]
+# Only register these routes if they don't already exist (avoids duplicates
+# when server.app's fallback path already added them).
+_existing = {r.path for r in app.routes}
 
-@app.get("/grader", response_model=GraderResponse)
-def get_grader_scores():
-    grader = TaskGrader(env)
-    return {
-        "task_scores": {
-            "task_1": grader.grade_task_1(),
-            "task_2": grader.grade_task_2(),
-            "task_3": grader.grade_task_3()
+if "/tasks" not in _existing:
+    @app.get("/tasks")
+    def list_tasks():
+        return [task.__dict__ for task in TASKS]
+
+if "/grader" not in _existing:
+    @app.get("/grader")
+    def get_grader_scores():
+        grader = TaskGrader(_env)
+        return {
+            "task_scores": {
+                "task_1": grader.grade_task_1(),
+                "task_2": grader.grade_task_2(),
+                "task_3": grader.grade_task_3(),
+            }
         }
-    }
 
-@app.get("/baseline", response_model=BaselineResponse)
-def run_baseline():
-    """ Runs the rule-based baseline agent and returns scores. """
-    env.reset()
-    agent = BaselineAgent(env)
-    observations = []
-    
-    while not env.done:
-        obs = env._get_obs()
-        observations.append(obs)
-        action = agent.select_action(obs)
-        env.step(action)
-    
-    grader = TaskGrader(env)
-    return {
-        "task_scores": {
-            "task_1": grader.grade_task_1(),
-            "task_2": grader.grade_task_2(),
-            "task_3": grader.grade_task_3()
-        },
-        "observations": observations
-    }
+if "/baseline" not in _existing:
+    @app.get("/baseline")
+    def run_baseline():
+        _env.reset()
+        agent = BaselineAgent(_env)
+        while not _env.done:
+            obs_dict = {
+                "doctor_slots": {str(k): v for k, v in _env.doctor_slots.items()},
+                "patients": {str(k): v for k, v in _env.patients.items()},
+                "waiting_queue": [str(p) for p in _env.waiting_queue],
+            }
+            action = agent.select_action(obs_dict)
+            _env.step_dict(action)
+        grader = TaskGrader(_env)
+        return {
+            "task_scores": {
+                "task_1": grader.grade_task_1(),
+                "task_2": grader.grade_task_2(),
+                "task_3": grader.grade_task_3(),
+            }
+        }
+
 
 if __name__ == "__main__":
     import uvicorn
