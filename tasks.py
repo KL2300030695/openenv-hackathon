@@ -9,10 +9,16 @@ class Task:
 class TaskGrader:
     """
     Grader for Healthcare Scheduling Tasks.
-    Returns a score between 0.0 and 1.0.
+    
+    IMPORTANT: OpenEnv requirements specify that scores MUST be strictly 
+    between 0 and 1 (not 0.0 and not 1.0). We use 0.01 and 0.99 as bounds.
     """
     def __init__(self, env):
         self.env = env
+
+    def _clamp(self, score: float) -> float:
+        """Clamp score to strictly (0, 1) range."""
+        return min(max(score, 0.01), 0.99)
 
     def grade_task_1(self) -> float:
         """
@@ -21,18 +27,19 @@ class TaskGrader:
         """
         booked_count = sum(1 for p in self.env.patients.values() if p["status"] == "booked")
         total_patients = len(self.env.patients)
-        return min(1.0, booked_count / (total_patients * 0.5))  # 50% booking is enough for full score here
+        # 50% booking is enough for full score here
+        raw_score = booked_count / (total_patients * 0.5)
+        return self._clamp(raw_score)
 
     def grade_task_2(self) -> float:
         """
         Task 2 (Medium): Handle scheduling conflicts and rescheduling.
         Score based on rescheduling success and slot utilization.
         """
-        # We can track successful reschedules in the info dict if we want,
-        # but for simplicity, let's use efficiency.
         booked_count = sum(1 for p in self.env.patients.values() if p["status"] == "booked")
         # In Task 2, we expect some rescheduling to happen.
-        return min(1.0, booked_count / (len(self.env.patients) * 0.7))
+        raw_score = booked_count / (len(self.env.patients) * 0.7)
+        return self._clamp(raw_score)
 
     def grade_task_3(self) -> float:
         """
@@ -55,7 +62,8 @@ class TaskGrader:
         else:
             p2_score = p2_booked / p2_total
             
-        return (p1_score * 0.7) + (p2_score * 0.3)
+        raw_score = (p1_score * 0.7) + (p2_score * 0.3)
+        return self._clamp(raw_score)
 
 TASKS = [
     Task("Task 1", "Easy", "Successfully book an appointment when slots are available."),

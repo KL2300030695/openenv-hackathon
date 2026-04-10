@@ -154,9 +154,9 @@ class HealthcareEnvironment(Environment):
         if self.current_step >= self.max_steps or not self.waiting_queue:
             self.done = True
 
-        # Update score based on booking success
+        # Update score based on booking success - strictly between 0 and 1
         booked = sum(1 for p in self.patients.values() if p["status"] == "booked")
-        self._state.score = max(booked / self.num_patients, 0.01)
+        self._state.score = min(max(booked / self.num_patients, 0.01), 0.99)
 
         return self._make_obs(reward, info)
 

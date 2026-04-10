@@ -280,7 +280,7 @@ def run_inference():
     for task_def in task_defs:
         task_name = task_def["name"]
         grade_fn = getattr(grader, task_def["grader"])
-        task_score = min(max(grade_fn(), 0.0), 1.0)  # clamp to [0, 1]
+        task_score = min(max(grade_fn(), 0.01), 0.99)  # strictly between (0, 1)
         success = task_score > 0.0
 
         log_start(task=task_name, env=BENCHMARK, model=MODEL_NAME)
