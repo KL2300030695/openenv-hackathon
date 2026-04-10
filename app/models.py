@@ -9,19 +9,28 @@ from typing import Any, Dict, List, Optional, Union
 
 from pydantic import BaseModel, Field
 
-# ── OpenEnv base types (with graceful fallback) ────────────────────────
+# ── OpenEnv base types (correct import path matching passing submissions) ──
 try:
-    from openenv.core.env_server.types import Action, Observation
+    from openenv.core.env_server import Action, Observation, State
 except ImportError:
-    # Fallback: define minimal base classes so the env still works standalone
-    class Action(BaseModel):
-        """Base action class (fallback when openenv-core is not installed)."""
-        pass
+    try:
+        from openenv.core.env_server.types import Action, Observation
+        from openenv.core.env_server.types import State
+    except ImportError:
+        # Fallback: define minimal base classes so the env still works standalone
+        class Action(BaseModel):
+            """Base action class (fallback when openenv-core is not installed)."""
+            pass
 
-    class Observation(BaseModel):
-        """Base observation class (fallback when openenv-core is not installed)."""
-        done: bool = False
-        reward: float = 0.0
+        class Observation(BaseModel):
+            """Base observation class (fallback when openenv-core is not installed)."""
+            done: bool = False
+            reward: float = 0.0
+
+        class State(BaseModel):
+            """Base state class (fallback when openenv-core is not installed)."""
+            episode_id: str = ""
+            step_count: int = 0
 
 
 # ── Environment Action ────────────────────────────────────────────────
@@ -70,6 +79,17 @@ class HealthcareObservation(Observation):
         default=None,
         description="Additional info (errors, status messages)",
     )
+    score: Optional[float] = Field(
+        default=None,
+        description="Current score for the episode",
+    )
+
+
+# ── Environment State ────────────────────────────────────────────────
+class HealthcareState(State):
+    """Custom state for the Healthcare Scheduling environment."""
+    difficulty: str = "easy"
+    score: float = 0.01
 
 
 # ── API Response Models (for FastAPI endpoint compatibility) ──────────

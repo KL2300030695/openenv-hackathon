@@ -45,18 +45,28 @@ from app.tasks import TASKS, TaskGrader
 # ── Build the FastAPI app ───────────────────────────────────────────
 _using_openenv = False
 try:
-    from openenv.core.env_server.http_server import create_app
+    # Primary import path (matching passing submissions)
+    from openenv.core.env_server import create_fastapi_app
 
-    app = create_app(
-        HealthcareEnvironment,
-        HealthcareAction,
-        HealthcareObservation,
-        env_name="healthcare_scheduling",
-        max_concurrent_envs=1,
-    )
+    app = create_fastapi_app(HealthcareEnvironment, HealthcareAction, HealthcareObservation)
     _using_openenv = True
 
 except ImportError:
+    try:
+        # Alternative import path
+        from openenv.core.env_server.http_server import create_app
+
+        app = create_app(
+            HealthcareEnvironment,
+            HealthcareAction,
+            HealthcareObservation,
+            env_name="healthcare_scheduling",
+        )
+        _using_openenv = True
+    except ImportError:
+        pass
+
+if not _using_openenv:
     # Fallback: build a plain FastAPI app when openenv-core isn't available
     from fastapi import FastAPI
     from fastapi.responses import JSONResponse
@@ -67,7 +77,8 @@ except ImportError:
         description="Healthcare Appointment Scheduling RL Environment",
     )
 
-# ── Global environment instance for custom endpoints ────────────────
+
+
 _env = HealthcareEnvironment()
 
 
