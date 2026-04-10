@@ -45,7 +45,7 @@ class HealthcareEnvironment(Environment):
         self._seed = seed
         self._state = HealthcareState(episode_id=str(uuid4()), step_count=0)
 
-        # Internal state (populated by reset)
+        # Internal state
         self.doctor_slots: Dict[int, List[bool]] = {}
         self.patients: Dict[int, Dict[str, Any]] = {}
         self.waiting_queue: List[int] = []
@@ -53,6 +53,10 @@ class HealthcareEnvironment(Environment):
         self.max_steps: int = 0
         self.done: bool = False
         self._action_history: List[Dict[str, Any]] = []
+
+        # Auto-reset so the env is usable immediately after __init__
+        self.reset()
+
 
     # ── OpenEnv Interface ─────────────────────────────────────────────
 
@@ -97,7 +101,7 @@ class HealthcareEnvironment(Environment):
             current_step=self.current_step,
             info={},
             done=False,
-            reward=0.0,
+            reward=0.01,
             score=0.01,
         )
 
@@ -113,7 +117,7 @@ class HealthcareEnvironment(Environment):
                 current_step=self.current_step,
                 info={"error": "Environment done"},
                 done=True,
-                reward=0.0,
+                reward=0.01,
                 score=self._state.score,
             )
 
@@ -195,6 +199,8 @@ class HealthcareEnvironment(Environment):
     # ── Internal helpers ─────────────────────────────────────────────
 
     def _make_obs(self, reward: float, info: Dict[str, Any]) -> HealthcareObservation:
+        # Clamp reward to strictly (0, 1) — framework exposes this at top level
+        clamped_reward = min(max(float(reward), 0.01), 0.99)
         return HealthcareObservation(
             doctor_slots={str(k): v for k, v in self.doctor_slots.items()},
             patients={str(k): v for k, v in self.patients.items()},
@@ -202,7 +208,7 @@ class HealthcareEnvironment(Environment):
             current_step=self.current_step,
             info=info,
             done=self.done,
-            reward=reward,
+            reward=clamped_reward,
             score=self._state.score,
         )
 
