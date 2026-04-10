@@ -12,6 +12,11 @@ factory, which automatically provides standardised endpoints:
     - GET  /web       : Interactive web interface
     - GET  /docs      : Swagger/OpenAPI documentation
 
+Custom domain endpoints are always added:
+    - GET  /grader    : Grade the current episode
+    - GET  /tasks     : List task definitions
+    - GET  /baseline  : Run baseline agent
+
 Usage:
     uvicorn server.app:app --host 0.0.0.0 --port 7860
 """
@@ -34,8 +39,11 @@ if str(PROJECT_ROOT) not in sys.path:
 # ── Import environment and models ───────────────────────────────────
 from app.env import HealthcareEnvironment
 from app.models import HealthcareAction, HealthcareObservation
+from app.agent import BaselineAgent
+from app.tasks import TASKS, TaskGrader
 
 # ── Build the FastAPI app ───────────────────────────────────────────
+_using_openenv = False
 try:
     from openenv.core.env_server.http_server import create_app
 
@@ -46,56 +54,44 @@ try:
         env_name="healthcare_scheduling",
         max_concurrent_envs=1,
     )
+    _using_openenv = True
 
 except ImportError:
     # Fallback: build a plain FastAPI app when openenv-core isn't available
     from fastapi import FastAPI
-    from fastapi.staticfiles import StaticFiles
-    from fastapi.responses import FileResponse, JSONResponse
-
-    from app.agent import BaselineAgent
-    from app.tasks import TASKS, TaskGrader
-
-    DESCRIPTION = """\
-    ## Healthcare Appointment Scheduling — OpenEnv Environment
-
-    RL environment simulating a hospital appointment booking system.
-
-    ### Endpoints
-    - `POST /reset` — Start a new episode
-    - `POST /step` — Execute an action
-    - `GET  /state` — Current observation
-    - `GET  /health` — Container health check
-    - `GET  /tasks` — Task definitions
-    - `GET  /grader` — Grading scores
-    - `GET  /baseline` — Baseline agent performance
-    """
+    from fastapi.responses import JSONResponse
 
     app = FastAPI(
-        title="Healthcare Scheduling — OpenEnv",
+        title="Healthcare Scheduling - OpenEnv",
         version="1.0.0",
-        description=DESCRIPTION,
+        description="Healthcare Appointment Scheduling RL Environment",
     )
 
-    # Serve static files
-    STATIC_DIR = os.path.join(PROJECT_ROOT, "static")
-    if os.path.isdir(STATIC_DIR):
-        app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
+# ── Global environment instance for custom endpoints ────────────────
+_env = HealthcareEnvironment()
 
-        @app.get("/", include_in_schema=False)
-        def serve_frontend():
-            return FileResponse(os.path.join(STATIC_DIR, "index.html"))
 
-    # Global environment instance
-    env = HealthcareEnvironment()
+# ── Root / health endpoints (always needed) ─────────────────────────
+@app.get("/", include_in_schema=False)
+def root():
+    return {
+        "name": "healthcare_scheduling",
+        "status": "running",
+        "version": "1.0.0",
+        "endpoints": ["/reset", "/step", "/state", "/health", "/schema",
+                       "/grader", "/tasks", "/baseline", "/docs"],
+    }
 
+
+if not _using_openenv:
+    # Only add these if create_app() didn't provide them
     @app.get("/health")
     def health_check():
         return {"status": "healthy", "service": "healthcare_scheduling"}
 
     @app.api_route("/reset", methods=["GET", "POST"])
     def reset_env():
-        obs = env.reset()
+        obs = _env.reset()
         return {
             "observation": obs.model_dump() if hasattr(obs, "model_dump") else obs.__dict__,
             "info": {},
@@ -103,7 +99,7 @@ except ImportError:
 
     @app.post("/step")
     def step_env(action: HealthcareAction):
-        obs = env.step(action)
+        obs = _env.step(action)
         return {
             "observation": obs.model_dump() if hasattr(obs, "model_dump") else obs.__dict__,
             "reward": obs.reward,
@@ -115,10 +111,10 @@ except ImportError:
     def get_state():
         return {
             "state": {
-                "doctor_slots": {str(k): v for k, v in env.doctor_slots.items()},
-                "patients": {str(k): v for k, v in env.patients.items()},
-                "waiting_queue": [str(p) for p in env.waiting_queue],
-                "current_step": env.current_step,
+                "doctor_slots": {str(k): v for k, v in _env.doctor_slots.items()},
+                "patients": {str(k): v for k, v in _env.patients.items()},
+                "waiting_queue": [str(p) for p in _env.waiting_queue],
+                "current_step": _env.current_step,
             }
         }
 
@@ -129,43 +125,50 @@ except ImportError:
             "observation_schema": HealthcareObservation.model_json_schema(),
         }
 
-    @app.get("/tasks")
-    def list_tasks():
-        return [task.__dict__ for task in TASKS]
 
-    @app.get("/grader")
-    def get_grader_scores():
-        grader = TaskGrader(env)
-        return {
-            "task_scores": {
-                "task_1": grader.grade_task_1(),
-                "task_2": grader.grade_task_2(),
-                "task_3": grader.grade_task_3(),
-            }
+# ── Custom domain endpoints (ALWAYS registered) ────────────────────
+@app.get("/tasks")
+def list_tasks():
+    """List all task definitions."""
+    return [task.__dict__ for task in TASKS]
+
+
+@app.get("/grader")
+def get_grader_scores():
+    """Grade the current episode across all tasks."""
+    grader = TaskGrader(_env)
+    return {
+        "task_scores": {
+            "task_1": grader.grade_task_1(),
+            "task_2": grader.grade_task_2(),
+            "task_3": grader.grade_task_3(),
         }
+    }
 
-    @app.get("/baseline")
-    def run_baseline():
-        env.reset()
-        agent = BaselineAgent(env)
 
-        while not env.done:
-            obs_dict = {
-                "doctor_slots": {str(k): v for k, v in env.doctor_slots.items()},
-                "patients": {str(k): v for k, v in env.patients.items()},
-                "waiting_queue": [str(p) for p in env.waiting_queue],
-            }
-            action = agent.select_action(obs_dict)
-            env.step_dict(action)
+@app.get("/baseline")
+def run_baseline():
+    """Run the baseline agent and return scores."""
+    _env.reset()
+    agent = BaselineAgent(_env)
 
-        grader = TaskGrader(env)
-        return {
-            "task_scores": {
-                "task_1": grader.grade_task_1(),
-                "task_2": grader.grade_task_2(),
-                "task_3": grader.grade_task_3(),
-            }
+    while not _env.done:
+        obs_dict = {
+            "doctor_slots": {str(k): v for k, v in _env.doctor_slots.items()},
+            "patients": {str(k): v for k, v in _env.patients.items()},
+            "waiting_queue": [str(p) for p in _env.waiting_queue],
         }
+        action = agent.select_action(obs_dict)
+        _env.step_dict(action)
+
+    grader = TaskGrader(_env)
+    return {
+        "task_scores": {
+            "task_1": grader.grade_task_1(),
+            "task_2": grader.grade_task_2(),
+            "task_3": grader.grade_task_3(),
+        }
+    }
 
 
 # ── Direct execution ────────────────────────────────────────────────
