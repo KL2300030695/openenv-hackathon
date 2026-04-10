@@ -258,17 +258,17 @@ def run_inference():
         }
 
         step_error = obs.info.get("error") if obs.info else None
-        step_action_str = action_to_str(action_dict)
+        step_action_type = action_dict.get("type", "waitlist")
 
         steps_taken += 1
         rewards.append(obs.reward)
-        actions.append(step_action_str)
+        actions.append(step_action_type)
         dones.append(obs.done)
         errors.append(step_error)
 
         # Track history so LLM can learn from mistakes
         action_history.append({
-            "action_str": step_action_str,
+            "action_str": action_to_str(action_dict),
             "reward": obs.reward,
             "error": step_error,
         })
