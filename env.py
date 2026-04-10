@@ -21,7 +21,7 @@ except ImportError:
             SUPPORTS_CONCURRENT_SESSIONS = False
 
 try:
-    from app.models import HealthcareAction, HealthcareObservation, HealthcareState
+    from models import HealthcareAction, HealthcareObservation, HealthcareState
 except ImportError:
     from .models import HealthcareAction, HealthcareObservation, HealthcareState
 

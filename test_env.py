@@ -13,10 +13,10 @@ import os
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from app.env import HealthcareEnvironment
-from app.models import HealthcareAction
-from app.agent import BaselineAgent
-from app.tasks import TaskGrader
+from env import HealthcareEnvironment
+from models import HealthcareAction
+from agent import BaselineAgent
+from tasks import TaskGrader
 
 
 def test():

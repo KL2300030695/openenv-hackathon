@@ -34,9 +34,9 @@ from openai import OpenAI
 # ── Import environment components ────────────────────────────────────
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from app.env import HealthcareEnvironment
-from app.models import HealthcareAction
-from app.tasks import TaskGrader
+from env import HealthcareEnvironment
+from models import HealthcareAction
+from tasks import TaskGrader
 
 # ── Environment variables (per submission guidelines) ────────────────
 API_BASE_URL = os.getenv("API_BASE_URL", "https://router.huggingface.co/v1")
@@ -46,7 +46,7 @@ HF_TOKEN = os.getenv("HF_TOKEN")
 if HF_TOKEN is None:
     raise ValueError("HF_TOKEN environment variable is required")
 
-BENCHMARK = "healthcare-scheduling"
+BENCHMARK = "healthcare_scheduling"
 MAX_STEPS = 20
 
 # Initialize OpenAI client

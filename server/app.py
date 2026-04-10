@@ -38,10 +38,10 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 # ── Import environment and models ───────────────────────────────────
-from app.env import HealthcareEnvironment
-from app.models import HealthcareAction, HealthcareObservation
-from app.agent import BaselineAgent
-from app.tasks import TASKS, TaskGrader
+from env import HealthcareEnvironment
+from models import HealthcareAction, HealthcareObservation
+from agent import BaselineAgent
+from tasks import TASKS, TaskGrader
 
 # ── Build the FastAPI app ───────────────────────────────────────────
 _using_openenv = False
@@ -189,7 +189,7 @@ def main():
     import uvicorn
 
     port = int(os.getenv("API_PORT", "7860"))
-    uvicorn.run(app, host="0.0.0.0", port=port)
+    uvicorn.run("server.app:app", host="0.0.0.0", port=port, reload=True)
 
 
 if __name__ == "__main__":
