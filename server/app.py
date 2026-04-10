@@ -21,7 +21,8 @@ Usage:
     uvicorn server.app:app --host 0.0.0.0 --port 7860
 """
 
-from __future__ import annotations
+
+
 
 import os
 import sys
@@ -183,20 +184,13 @@ def run_baseline():
 
 
 # ── Direct execution ────────────────────────────────────────────────
-def main(host: str = "0.0.0.0", port: int | None = None):
+def main():
     """Run the Healthcare Scheduling server."""
     import uvicorn
 
-    if port is None:
-        port = int(os.getenv("API_PORT", "7860"))
-
-    uvicorn.run(app, host=host, port=port)
+    port = int(os.getenv("API_PORT", "7860"))
+    uvicorn.run(app, host="0.0.0.0", port=port)
 
 
 if __name__ == "__main__":
-    import argparse
-
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--port", type=int, default=7860)
-    args = parser.parse_args()
-    main(port=args.port)
+    main()
