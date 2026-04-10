@@ -1,5 +1,17 @@
+name: "healthcare_scheduling"
+version: "1.0.0"
+description: "Healthcare Appointment Scheduling RL Environment"
+authors:
+  - "Vadaparthi <vadaparthi@example.com>"
+tags:
+  - healthcare
+  - scheduling
+  - rl
+  - fastapi
+entrypoint: "server.app:app"
+supports_concurrent_sessions: true
+# Standard OpenEnv space fields
 spec_version: 1
-name: healthcare_scheduling
 type: space
 runtime: fastapi
 app: server.app:app
