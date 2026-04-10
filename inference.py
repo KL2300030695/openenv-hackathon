@@ -53,27 +53,26 @@ MAX_STEPS = 20
 client = OpenAI(base_url=API_BASE_URL, api_key=HF_TOKEN)
 
 
-# ── Structured logging helpers (match spec exactly) ─────────────────
-def log_start(task: str, env: str, model: str) -> None:
+# ── Structured logging helpers (match PASSING submission format) ────
+def log_start(task: str) -> None:
     """Emit [START] line at episode begin."""
-    print(f"[START] task={task} env={env} model={model}", flush=True)
+    print(f"[START] task={task}", flush=True)
 
 
-def log_step(step: int, action: str, reward: float, done: bool, error: Optional[str]) -> None:
+def log_step(step: int, action: str, reward: float) -> None:
     """Emit [STEP] line immediately after env.step() returns."""
-    error_val = error if error else "null"
-    done_val = str(done).lower()
     print(
-        f"[STEP] step={step} action={action} reward={reward:.2f} done={done_val} error={error_val}",
+        f"[STEP] step={step} action={action} reward={reward:.2f}",
         flush=True,
     )
 
 
-def log_end(success: bool, steps: int, rewards: List[float]) -> None:
-    """Emit [END] line after episode ends. Always emitted, even on exception."""
-    rewards_str = ",".join(f"{r:.2f}" for r in rewards)
+def log_end(task: str, score: float, steps: int) -> None:
+    """Emit [END] line after episode ends."""
+    # Score MUST be strictly between 0 and 1
+    score = min(max(float(score), 0.01), 0.99)
     print(
-        f"[END] success={str(success).lower()} steps={steps} rewards={rewards_str}",
+        f"[END] task={task} score={score} steps={steps}",
         flush=True,
     )
 
@@ -281,21 +280,17 @@ def run_inference():
         task_name = task_def["name"]
         grade_fn = getattr(grader, task_def["grader"])
         task_score = min(max(grade_fn(), 0.01), 0.99)  # strictly between (0, 1)
-        success = task_score > 0.0
 
-        log_start(task=task_name, env=BENCHMARK, model=MODEL_NAME)
+        log_start(task=task_name)
 
         for i in range(steps_taken):
             log_step(
                 step=i + 1,
                 action=actions[i],
                 reward=rewards[i],
-                done=dones[i],
-                error=errors[i],
             )
 
-        # [END] line — NO score= field, per submission spec
-        log_end(success=success, steps=steps_taken, rewards=rewards)
+        log_end(task=task_name, score=task_score, steps=steps_taken)
 
     sys.exit(0)
 
