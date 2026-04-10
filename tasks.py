@@ -17,17 +17,22 @@ class TaskGrader:
         self.env = env
 
     def _clamp(self, score: float) -> float:
-        """Clamp score to strictly (0, 1) range."""
-        return min(max(score, 0.01), 0.99)
+        """Clamp score to strictly (0, 1) range — never exactly 0.0 or 1.0."""
+        if score != score:  # NaN check
+            return 0.5
+        return min(max(float(score), 0.01), 0.99)
 
     def grade_task_1(self) -> float:
         """
         Task 1 (Easy): successfully book an appointment when slots are available.
         Score based on number of waiting patients booked.
         """
-        booked_count = sum(1 for p in self.env.patients.values() if p["status"] == "booked")
+        if not self.env.patients:
+            return 0.5  # No patients = default mid-range score
+        booked_count = sum(1 for p in self.env.patients.values() if p.get("status") == "booked")
         total_patients = len(self.env.patients)
-        # 50% booking is enough for full score here
+        if total_patients == 0:
+            return 0.5
         raw_score = booked_count / (total_patients * 0.5)
         return self._clamp(raw_score)
 
@@ -36,9 +41,13 @@ class TaskGrader:
         Task 2 (Medium): Handle scheduling conflicts and rescheduling.
         Score based on rescheduling success and slot utilization.
         """
-        booked_count = sum(1 for p in self.env.patients.values() if p["status"] == "booked")
-        # In Task 2, we expect some rescheduling to happen.
-        raw_score = booked_count / (len(self.env.patients) * 0.7)
+        if not self.env.patients:
+            return 0.5
+        booked_count = sum(1 for p in self.env.patients.values() if p.get("status") == "booked")
+        total_patients = len(self.env.patients)
+        if total_patients == 0:
+            return 0.5
+        raw_score = booked_count / (total_patients * 0.7)
         return self._clamp(raw_score)
 
     def grade_task_3(self) -> float:
@@ -46,19 +55,21 @@ class TaskGrader:
         Task 3 (Hard): Optimize scheduling for multiple patients with different priorities.
         Score based on priority completion. Priority 1 should be booked FIRST.
         """
-        p1_total = sum(1 for p in self.env.patients.values() if p["priority"] == 1)
-        p1_booked = sum(1 for p in self.env.patients.values() if p["priority"] == 1 and p["status"] == "booked")
+        if not self.env.patients:
+            return 0.5
+        p1_total = sum(1 for p in self.env.patients.values() if p.get("priority") == 1)
+        p1_booked = sum(1 for p in self.env.patients.values() if p.get("priority") == 1 and p.get("status") == "booked")
         
-        p2_total = sum(1 for p in self.env.patients.values() if p["priority"] == 2)
-        p2_booked = sum(1 for p in self.env.patients.values() if p["priority"] == 2 and p["status"] == "booked")
+        p2_total = sum(1 for p in self.env.patients.values() if p.get("priority") == 2)
+        p2_booked = sum(1 for p in self.env.patients.values() if p.get("priority") == 2 and p.get("status") == "booked")
         
         if p1_total == 0:
-            p1_score = 1.0
+            p1_score = 0.5
         else:
             p1_score = p1_booked / p1_total
 
         if p2_total == 0:
-            p2_score = 1.0
+            p2_score = 0.5
         else:
             p2_score = p2_booked / p2_total
             

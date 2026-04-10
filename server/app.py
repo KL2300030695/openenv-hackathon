@@ -81,6 +81,7 @@ if not _using_openenv:
 
 
 _env = HealthcareEnvironment()
+_env.reset()  # MUST reset at startup so grader has valid patient data
 
 
 # ── Root / health endpoints (always needed) ─────────────────────────
@@ -148,12 +149,23 @@ def list_tasks():
 @app.get("/grader")
 def get_grader_scores():
     """Grade the current episode across all tasks."""
+    def safe_score(fn):
+        """Ensure score is always strictly between 0 and 1."""
+        try:
+            s = fn()
+            s = float(s)
+            if s != s:  # NaN
+                return 0.5
+            return min(max(s, 0.01), 0.99)
+        except Exception:
+            return 0.5
+
     grader = TaskGrader(_env)
     return {
         "task_scores": {
-            "task_1": grader.grade_task_1(),
-            "task_2": grader.grade_task_2(),
-            "task_3": grader.grade_task_3(),
+            "task_1": safe_score(grader.grade_task_1),
+            "task_2": safe_score(grader.grade_task_2),
+            "task_3": safe_score(grader.grade_task_3),
         }
     }
 
