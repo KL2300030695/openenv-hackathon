@@ -221,14 +221,21 @@ def run_inference():
         "current_step": obs.current_step,
     }
 
+    # ── Grading functions for the final [END] line ──
+    grader = TaskGrader(env)
+
+    # ── Reporting Setup ──
+    # Using the primary task name as the default reporter
+    primary_task = "healthcare_appointment_scheduling"
+    
     try:
-        # ── Run the agent loop and collect step data ──
+        # Emit [START] at the very beginning
+        log_start(task=primary_task, env=BENCHMARK, model=MODEL_NAME)
+
+        # ── Run the agent loop ──
         steps_taken = 0
         rewards: List[float] = []
-        actions: List[str] = []
-        dones: List[bool] = []
-        errors: List[Optional[str]] = []
-        action_history: List[Dict[str, Any]] = []  # memory for the LLM
+        action_history: List[Dict[str, Any]] = []
 
         while not env.done and steps_taken < MAX_STEPS:
             action_dict = get_action_from_llm(obs_dict, action_history)
@@ -242,6 +249,7 @@ def run_inference():
             )
             obs = env.step(action)
 
+            # Update observation for next step
             obs_dict = {
                 "doctor_slots": obs.doctor_slots,
                 "patients": obs.patients,
@@ -249,49 +257,39 @@ def run_inference():
                 "current_step": obs.current_step,
             }
 
-            step_error = obs.info.get("error") if obs.info else None
+            step_error = obs.info.get("error") if obs.info else "null"
             step_action_type = action_dict.get("type", "waitlist")
-
+            
             steps_taken += 1
             rewards.append(obs.reward)
-            actions.append(step_action_type)
-            dones.append(obs.done)
-            errors.append(step_error)
 
-            # Track history so LLM can learn from mistakes
+            # Emit [STEP] line IMMEDIATELY after env.step() returns
+            log_step(
+                step=steps_taken,
+                action=action_to_str(action_dict),
+                reward=obs.reward,
+                done=obs.done,
+                error=step_error,
+            )
+
+            # Track history for LLM
             action_history.append({
                 "action_str": action_to_str(action_dict),
                 "reward": obs.reward,
-                "error": step_error,
+                "error": step_error if step_error != "null" else None,
             })
 
-        # ── Grade all tasks ──
-        grader = TaskGrader(env)
+        # Calculate final success (based on Task 1 logic or similar)
+        # We'll use the average of available graders or just the primary one
+        task_score = grader.grade_task_1()
+        success = task_score > 0.5
 
-        # ── Emit one structured [START]/[STEP]/[END] block per task ──
-        for task_def in task_defs:
-            task_name = task_def["name"]
-            grade_fn = getattr(grader, task_def["grader"])
-            task_score = min(max(grade_fn(), 0.01), 0.99)  # strictly between (0, 1)
-            success = task_score > 0.0
+        # Emit [END] line after episode ends
+        log_end(success=success, steps=steps_taken, rewards=rewards)
 
-            log_start(task=task_name, env=BENCHMARK, model=MODEL_NAME)
-
-            for i in range(steps_taken):
-                log_step(
-                    step=i + 1,
-                    action=actions[i],
-                    reward=rewards[i],
-                    done=dones[i],
-                    error=errors[i],
-                )
-
-            log_end(success=success, steps=steps_taken, rewards=rewards)
-
-    except Exception as e:
-        # Ensure at least one [END] line if everything crashes before reporting
-        # This is a safety measure to meet the "always emitted" requirement
-        log_end(success=False, steps=0, rewards=[0.0])
+    except Exception:
+        # Fallback to ensure [END] is emitted even on failure
+        log_end(success=False, steps=steps_taken if 'steps_taken' in locals() else 0, rewards=rewards if 'rewards' in locals() else [0.0])
     finally:
         sys.exit(0)
 
