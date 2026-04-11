@@ -203,13 +203,6 @@ def action_to_str(action: Dict[str, Any]) -> str:
 
 # ── Main inference loop ─────────────────────────────────────────────
 def run_inference():
-    # Task definitions
-    task_defs = [
-        {"name": "book_appointment", "grader": "grade_task_1"},
-        {"name": "scheduling_conflicts", "grader": "grade_task_2"},
-        {"name": "priority_scheduling", "grader": "grade_task_3"},
-    ]
-
     env = HealthcareEnvironment(seed=42)
     obs = env.reset()
 
@@ -221,19 +214,15 @@ def run_inference():
         "current_step": obs.current_step,
     }
 
-    # ── Grading functions for the final [END] line ──
-    grader = TaskGrader(env)
+    steps_taken = 0
+    rewards: List[float] = []
+    action_history: List[Dict[str, Any]] = []
 
-    # ── Reporting Setup ──
-    # Using the primary task name as the default reporter
-    primary_task = "healthcare_appointment_scheduling"
-    
     try:
-        # ── Run the agent loop ──
-        steps_taken = 0
-        rewards: List[float] = []
-        action_history: List[Dict[str, Any]] = []
+        # ── Single [START] ──
+        log_start(task="healthcare_task", env=BENCHMARK, model=MODEL_NAME)
 
+        # ── Agent loop: each [STEP] emitted once, immediately after env.step() ──
         while not env.done and steps_taken < MAX_STEPS:
             action_dict = get_action_from_llm(obs_dict, action_history)
 
@@ -254,50 +243,38 @@ def run_inference():
                 "current_step": obs.current_step,
             }
 
-            step_error = obs.info.get("error") if obs.info else "null"
-            
+            step_error = obs.info.get("error") if obs.info and obs.info.get("error") else "null"
+
             steps_taken += 1
             rewards.append(obs.reward)
 
-            # Track history for playback in the task blocks
+            # Emit [STEP] ONCE, immediately after env.step()
+            log_step(
+                step=steps_taken,
+                action=action_to_str(action_dict),
+                reward=obs.reward,
+                done=env.done,
+                error=step_error,
+            )
+
+            # Track history for LLM context
             action_history.append({
                 "action_str": action_to_str(action_dict),
                 "reward": obs.reward,
                 "error": step_error if step_error != "null" else None,
             })
 
-        # ── Emit one structured [START]/[STEP]/[END] block per task ──
-        for task_def in task_defs:
-            task_name = task_def["name"]
-            grade_fn = getattr(grader, task_def["grader"])
-            task_score = grade_fn()  # Get score strictly in (0, 1) from tasks.py
-            success = task_score > 0.5
+        # ── Determine success ──
+        grader = TaskGrader(env)
+        task_score = grader.grade_task_1()
+        success = task_score > 0.5
 
-            log_start(task=task_name, env=BENCHMARK, model=MODEL_NAME)
-
-            # Re-emit steps for each task (playback)
-            for i in range(len(rewards)):
-                # We need to reconstruct the STEP output for each task
-                # Using the stored history
-                h = action_history[i]
-                log_step(
-                    step=i + 1,
-                    action=h["action_str"],
-                    reward=h["reward"],
-                    done=(i == len(rewards) - 1),  # Last step is done
-                    error=h["error"] if h["error"] else "null",
-                )
-
-            # Emit [END] with explicit score
-            rewards_str = ",".join(f"{r:.2f}" for r in rewards)
-            print(
-                f"[END] success={str(success).lower()} steps={steps_taken} score={task_score:.2f} rewards={rewards_str}",
-                flush=True,
-            )
+        # ── Single [END] ──
+        log_end(success=success, steps=steps_taken, rewards=rewards)
 
     except Exception:
         # Fallback to ensure [END] is emitted even on failure
-        log_end(success=False, steps=steps_taken if 'steps_taken' in locals() else 0, rewards=rewards if 'rewards' in locals() else [0.0])
+        log_end(success=False, steps=steps_taken, rewards=rewards if rewards else [0.0])
     finally:
         sys.exit(0)
 
