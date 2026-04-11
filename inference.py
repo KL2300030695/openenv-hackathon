@@ -264,10 +264,23 @@ def run_inference():
                 "error": step_error if step_error != "null" else None,
             })
 
-        # ── Determine success ──
+        # ── Determine success (all 3 tasks required by OpenEnv) ──
         grader = TaskGrader(env)
-        task_score = grader.grade_task_1()
-        success = task_score > 0.5
+
+        def fix_score(s):
+            """Ensure score is strictly between (0, 1) — never 0.0 or 1.0."""
+            if s <= 0.0:
+                return 0.01
+            elif s >= 1.0:
+                return 0.99
+            return s
+
+        s1 = fix_score(grader.grade_task_1())
+        s2 = fix_score(grader.grade_task_2())
+        s3 = fix_score(grader.grade_task_3())
+
+        scores = [s1, s2, s3]
+        success = sum(scores) / len(scores) > 0.5
 
         # ── Single [END] ──
         log_end(success=success, steps=steps_taken, rewards=rewards)
