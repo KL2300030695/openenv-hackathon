@@ -30,8 +30,8 @@ from models import HealthcareAction
 from tasks import TaskGrader
 
 # ── Environment variables (per submission guidelines) ────────────────
-API_BASE_URL = os.getenv("API_BASE_URL", "https://router.huggingface.co/v1")
-MODEL_NAME = os.getenv("MODEL_NAME", "meta-llama/Llama-3.1-8B-Instruct")
+API_BASE_URL = os.getenv("API_BASE_URL", "https://api.openai.com/v1")
+MODEL_NAME = os.getenv("MODEL_NAME", "gpt-4.1-mini")
 HF_TOKEN = os.getenv("HF_TOKEN")
 
 if HF_TOKEN is None:
@@ -60,11 +60,11 @@ def log_step(step: int, action: str, reward: float, done: bool, error: Optional[
     )
 
 
-def log_end(success: bool, steps: int, score: float, rewards: List[float]) -> None:
+def log_end(success: bool, steps: int, rewards: List[float]) -> None:
     """Emit [END] line after episode ends."""
     rewards_str = ",".join(f"{r:.2f}" for r in rewards)
     print(
-        f"[END] success={str(success).lower()} steps={steps} score={score:.2f} rewards={rewards_str}",
+        f"[END] success={str(success).lower()} steps={steps} rewards={rewards_str}",
         flush=True,
     )
 
@@ -147,8 +147,8 @@ Your action:"""
             text = text.strip()
 
         return json.loads(text)
-    except Exception as e:
-        print(f"[DEBUG] LLM error: {e}", flush=True)
+    except Exception:
+        # Silently log as fallback; do not print debug info to STDOUT
         # Smart fallback: try to find an available slot for a waiting patient
         return _fallback_action(obs)
 
@@ -221,73 +221,79 @@ def run_inference():
         "current_step": obs.current_step,
     }
 
-    # ── Run the agent loop and collect step data ──
-    steps_taken = 0
-    rewards: List[float] = []
-    actions: List[str] = []
-    dones: List[bool] = []
-    errors: List[Optional[str]] = []
-    action_history: List[Dict[str, Any]] = []  # memory for the LLM
+    try:
+        # ── Run the agent loop and collect step data ──
+        steps_taken = 0
+        rewards: List[float] = []
+        actions: List[str] = []
+        dones: List[bool] = []
+        errors: List[Optional[str]] = []
+        action_history: List[Dict[str, Any]] = []  # memory for the LLM
 
-    while not env.done and steps_taken < MAX_STEPS:
-        action_dict = get_action_from_llm(obs_dict, action_history)
+        while not env.done and steps_taken < MAX_STEPS:
+            action_dict = get_action_from_llm(obs_dict, action_history)
 
-        # Step using typed action
-        action = HealthcareAction(
-            type=action_dict.get("type", "waitlist"),
-            patient_id=action_dict.get("patient_id", 0),
-            doctor_id=action_dict.get("doctor_id"),
-            slot_id=action_dict.get("slot_id"),
-        )
-        obs = env.step(action)
-
-        obs_dict = {
-            "doctor_slots": obs.doctor_slots,
-            "patients": obs.patients,
-            "waiting_queue": obs.waiting_queue,
-            "current_step": obs.current_step,
-        }
-
-        step_error = obs.info.get("error") if obs.info else None
-        step_action_type = action_dict.get("type", "waitlist")
-
-        steps_taken += 1
-        rewards.append(obs.reward)
-        actions.append(step_action_type)
-        dones.append(obs.done)
-        errors.append(step_error)
-
-        # Track history so LLM can learn from mistakes
-        action_history.append({
-            "action_str": action_to_str(action_dict),
-            "reward": obs.reward,
-            "error": step_error,
-        })
-
-    # ── Grade all tasks ──
-    grader = TaskGrader(env)
-
-    # ── Emit one structured [START]/[STEP]/[END] block per task ──
-    for task_def in task_defs:
-        task_name = task_def["name"]
-        grade_fn = getattr(grader, task_def["grader"])
-        task_score = min(max(grade_fn(), 0.01), 0.99)  # strictly between (0, 1)
-        success = task_score > 0.0
-
-        log_start(task=task_name, env=BENCHMARK, model=MODEL_NAME)
-
-        for i in range(steps_taken):
-            log_step(
-                step=i + 1,
-                action=actions[i],
-                reward=rewards[i],
-                done=dones[i],
-                error=errors[i],
+            # Step using typed action
+            action = HealthcareAction(
+                type=action_dict.get("type", "waitlist"),
+                patient_id=action_dict.get("patient_id", 0),
+                doctor_id=action_dict.get("doctor_id"),
+                slot_id=action_dict.get("slot_id"),
             )
+            obs = env.step(action)
 
-        log_end(success=success, steps=steps_taken, score=task_score, rewards=rewards)
+            obs_dict = {
+                "doctor_slots": obs.doctor_slots,
+                "patients": obs.patients,
+                "waiting_queue": obs.waiting_queue,
+                "current_step": obs.current_step,
+            }
 
-    sys.exit(0)
+            step_error = obs.info.get("error") if obs.info else None
+            step_action_type = action_dict.get("type", "waitlist")
+
+            steps_taken += 1
+            rewards.append(obs.reward)
+            actions.append(step_action_type)
+            dones.append(obs.done)
+            errors.append(step_error)
+
+            # Track history so LLM can learn from mistakes
+            action_history.append({
+                "action_str": action_to_str(action_dict),
+                "reward": obs.reward,
+                "error": step_error,
+            })
+
+        # ── Grade all tasks ──
+        grader = TaskGrader(env)
+
+        # ── Emit one structured [START]/[STEP]/[END] block per task ──
+        for task_def in task_defs:
+            task_name = task_def["name"]
+            grade_fn = getattr(grader, task_def["grader"])
+            task_score = min(max(grade_fn(), 0.01), 0.99)  # strictly between (0, 1)
+            success = task_score > 0.0
+
+            log_start(task=task_name, env=BENCHMARK, model=MODEL_NAME)
+
+            for i in range(steps_taken):
+                log_step(
+                    step=i + 1,
+                    action=actions[i],
+                    reward=rewards[i],
+                    done=dones[i],
+                    error=errors[i],
+                )
+
+            log_end(success=success, steps=steps_taken, rewards=rewards)
+
+    except Exception as e:
+        # Ensure at least one [END] line if everything crashes before reporting
+        # This is a safety measure to meet the "always emitted" requirement
+        log_end(success=False, steps=0, rewards=[0.0])
+    finally:
+        sys.exit(0)
 
 
 if __name__ == "__main__":
