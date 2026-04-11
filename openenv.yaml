@@ -10,3 +10,17 @@ tags:
   - text-based
 entrypoint: "server.app:app"
 supports_concurrent_sessions: true
+
+tasks:
+  - id: "book_appointment"
+    name: "Task 1: Basic Booking"
+    description: "Successfully book an appointment when slots are available."
+    grader: "tasks:TaskGrader.grade_task_1"
+  - id: "scheduling_conflicts"
+    name: "Task 2: Conflict Management"
+    description: "Handle scheduling conflicts and rescheduling efficiently."
+    grader: "tasks:TaskGrader.grade_task_2"
+  - id: "priority_scheduling"
+    name: "Task 3: Priority Optimization"
+    description: "Optimize scheduling for patients with different priorities."
+    grader: "tasks:TaskGrader.grade_task_3"
