@@ -7,10 +7,10 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 
 def _clamp(score: float) -> float:
-    """Clamp score to strictly (0, 1)."""
+    """Clamp score to strictly (0, 1) with safe margins."""
     if score != score:
         return 0.5
-    return min(max(float(score), 0.01), 0.99)
+    return min(max(float(score), 0.1), 0.9)
 
 
 def grade(env=None) -> float:

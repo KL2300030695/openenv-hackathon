@@ -270,17 +270,17 @@ def run_task_episode(task_id: str, seed: int, max_steps: int = 10):
 
         # Clamp score strictly to (0, 1)
         if score <= 0.0:
-            score = 0.01
+            score = 0.1
         elif score >= 1.0:
-            score = 0.99
+            score = 0.9
 
         success = score > 0.5
         log_end(success=success, steps=steps_taken, rewards=rewards)
         return steps_taken, rewards, score
 
     except Exception:
-        log_end(success=False, steps=steps_taken, rewards=rewards if rewards else [0.0])
-        return steps_taken, rewards if rewards else [0.0], 0.01
+        log_end(success=False, steps=steps_taken, rewards=rewards if rewards else [0.1])
+        return steps_taken, rewards if rewards else [0.1], 0.1
 
 
 # ── Main inference loop ─────────────────────────────────────────────

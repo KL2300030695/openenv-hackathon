@@ -79,7 +79,7 @@ class HealthcareEnvironment(Environment):
         self._state = HealthcareState(
             episode_id=episode_id or str(uuid4()),
             step_count=0,
-            score=0.01,
+            score=0.1,
         )
 
         return HealthcareObservation(
@@ -89,8 +89,8 @@ class HealthcareEnvironment(Environment):
             current_step=self.current_step,
             info={},
             done=False,
-            reward=0.01,
-            score=0.01,
+            reward=0.1,
+            score=0.1,
         )
 
     def step(self, action: HealthcareAction, **kwargs) -> HealthcareObservation:
@@ -105,7 +105,7 @@ class HealthcareEnvironment(Environment):
                 current_step=self.current_step,
                 info={"error": "Environment done"},
                 done=True,
-                reward=0.01,
+                reward=0.1,
                 score=self._state.score,
             )
 
@@ -148,7 +148,7 @@ class HealthcareEnvironment(Environment):
 
         # Update score based on booking success - strictly between 0 and 1
         booked = sum(1 for p in self.patients.values() if p["status"] == "booked")
-        self._state.score = min(max(booked / self.num_patients, 0.01), 0.99)
+        self._state.score = min(max(booked / self.num_patients, 0.1), 0.9)
 
         return self._make_obs(reward, info)
 
@@ -188,7 +188,7 @@ class HealthcareEnvironment(Environment):
 
     def _make_obs(self, reward: float, info: Dict[str, Any]) -> HealthcareObservation:
         # Clamp reward to strictly (0, 1) — framework exposes this at top level
-        clamped_reward = min(max(float(reward), 0.01), 0.99)
+        clamped_reward = min(max(float(reward), 0.1), 0.9)
         return HealthcareObservation(
             doctor_slots={str(k): v for k, v in self.doctor_slots.items()},
             patients={str(k): v for k, v in self.patients.items()},
