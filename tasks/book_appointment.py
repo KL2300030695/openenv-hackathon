@@ -1,0 +1,29 @@
+"""
+Task 1 (Easy): Basic Booking Grader.
+Successfully book an appointment when slots are available.
+"""
+import sys, os
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+
+def _clamp(score: float) -> float:
+    """Clamp score to strictly (0, 1)."""
+    if score != score:
+        return 0.5
+    return min(max(float(score), 0.01), 0.99)
+
+
+def grade(env=None) -> float:
+    """Grade task 1: basic appointment booking."""
+    if env is None:
+        from env import HealthcareEnvironment
+        env = HealthcareEnvironment(seed=42)
+
+    if not env.patients:
+        return 0.5
+    booked_count = sum(1 for p in env.patients.values() if p.get("status") == "booked")
+    total_patients = len(env.patients)
+    if total_patients == 0:
+        return 0.5
+    raw_score = booked_count / (total_patients * 0.5)
+    return _clamp(raw_score)

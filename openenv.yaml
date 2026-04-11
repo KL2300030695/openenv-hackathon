@@ -1,6 +1,11 @@
+spec_version: 1
 name: "healthcare_scheduling"
 version: "1.0.0"
 description: "Healthcare Appointment Scheduling RL Environment"
+type: space
+runtime: fastapi
+app: server.app:app
+port: 7860
 authors:
   - "Vadaparthi <vadaparthi@example.com>"
 tags:
@@ -16,14 +21,14 @@ tasks:
     name: "Task 1: Basic Booking"
     description: "Successfully book an appointment when slots are available."
     difficulty: "easy"
-    grader: "tasks:grade_task_1"
+    grader: "tasks.book_appointment:grade"
   - id: "scheduling_conflicts"
     name: "Task 2: Conflict Management"
     description: "Handle scheduling conflicts and rescheduling efficiently."
     difficulty: "medium"
-    grader: "tasks:grade_task_2"
+    grader: "tasks.scheduling_conflicts:grade"
   - id: "priority_scheduling"
     name: "Task 3: Priority Optimization"
     description: "Optimize scheduling for patients with different priorities."
     difficulty: "hard"
-    grader: "tasks:grade_task_3"
+    grader: "tasks.priority_scheduling:grade"
