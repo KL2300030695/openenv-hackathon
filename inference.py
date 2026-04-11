@@ -201,12 +201,12 @@ def action_to_str(action: Dict[str, Any]) -> str:
     return f"{a_type}(patient={p},doctor={d},slot={s})"
 
 
-# ── Main inference loop ─────────────────────────────────────────────
-def run_inference():
-    env = HealthcareEnvironment(seed=42)
+# ── Run a single task episode ───────────────────────────────────────
+def run_task_episode(task_id: str, seed: int, max_steps: int = 10):
+    """Run one task episode and return (steps, rewards, score)."""
+    env = HealthcareEnvironment(seed=seed)
     obs = env.reset()
 
-    # Convert observation to dict for the LLM prompt
     obs_dict = {
         "doctor_slots": obs.doctor_slots,
         "patients": obs.patients,
@@ -218,15 +218,13 @@ def run_inference():
     rewards: List[float] = []
     action_history: List[Dict[str, Any]] = []
 
-    try:
-        # ── Single [START] ──
-        log_start(task="healthcare_task", env=BENCHMARK, model=MODEL_NAME)
+    # ── [START] ──
+    log_start(task=task_id, env=BENCHMARK, model=MODEL_NAME)
 
-        # ── Agent loop: each [STEP] emitted once, immediately after env.step() ──
-        while not env.done and steps_taken < MAX_STEPS:
+    try:
+        while not env.done and steps_taken < max_steps:
             action_dict = get_action_from_llm(obs_dict, action_history)
 
-            # Step using typed action
             action = HealthcareAction(
                 type=action_dict.get("type", "waitlist"),
                 patient_id=action_dict.get("patient_id", 0),
@@ -235,7 +233,6 @@ def run_inference():
             )
             obs = env.step(action)
 
-            # Update observation for next step
             obs_dict = {
                 "doctor_slots": obs.doctor_slots,
                 "patients": obs.patients,
@@ -248,7 +245,6 @@ def run_inference():
             steps_taken += 1
             rewards.append(obs.reward)
 
-            # Emit [STEP] ONCE, immediately after env.step()
             log_step(
                 step=steps_taken,
                 action=action_to_str(action_dict),
@@ -257,39 +253,46 @@ def run_inference():
                 error=step_error,
             )
 
-            # Track history for LLM context
             action_history.append({
                 "action_str": action_to_str(action_dict),
                 "reward": obs.reward,
                 "error": step_error if step_error != "null" else None,
             })
 
-        # ── Determine success (all 3 tasks required by OpenEnv) ──
+        # Grade the specific task
         grader = TaskGrader(env)
+        if task_id == "book_appointment":
+            score = grader.grade_task_1()
+        elif task_id == "scheduling_conflicts":
+            score = grader.grade_task_2()
+        else:
+            score = grader.grade_task_3()
 
-        def fix_score(s):
-            """Ensure score is strictly between (0, 1) — never 0.0 or 1.0."""
-            if s <= 0.0:
-                return 0.01
-            elif s >= 1.0:
-                return 0.99
-            return s
+        # Clamp score strictly to (0, 1)
+        if score <= 0.0:
+            score = 0.01
+        elif score >= 1.0:
+            score = 0.99
 
-        s1 = fix_score(grader.grade_task_1())
-        s2 = fix_score(grader.grade_task_2())
-        s3 = fix_score(grader.grade_task_3())
-
-        scores = [s1, s2, s3]
-        success = sum(scores) / len(scores) > 0.5
-
-        # ── Single [END] ──
+        success = score > 0.5
         log_end(success=success, steps=steps_taken, rewards=rewards)
+        return steps_taken, rewards, score
 
     except Exception:
-        # Fallback to ensure [END] is emitted even on failure
         log_end(success=False, steps=steps_taken, rewards=rewards if rewards else [0.0])
-    finally:
-        sys.exit(0)
+        return steps_taken, rewards if rewards else [0.0], 0.01
+
+
+# ── Main inference loop ─────────────────────────────────────────────
+def run_inference():
+    # Task IDs must match the `id` field in openenv.yaml
+    task_ids = ["book_appointment", "scheduling_conflicts", "priority_scheduling"]
+    seeds = [42, 123, 456]
+
+    for task_id, seed in zip(task_ids, seeds):
+        run_task_episode(task_id, seed=seed, max_steps=10)
+
+    sys.exit(0)
 
 
 if __name__ == "__main__":
