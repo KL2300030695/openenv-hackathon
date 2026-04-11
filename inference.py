@@ -60,11 +60,11 @@ def log_step(step: int, action: str, reward: float, done: bool, error: Optional[
     )
 
 
-def log_end(success: bool, steps: int, rewards: List[float]) -> None:
+def log_end(task: str, score: float, success: bool, steps: int, rewards: List[float]) -> None:
     """Emit [END] line after episode ends."""
     rewards_str = ",".join(f"{r:.2f}" for r in rewards)
     print(
-        f"[END] success={str(success).lower()} steps={steps} rewards={rewards_str}",
+        f"[END] task={task} score={score:.3f} success={str(success).lower()} steps={steps} rewards={rewards_str}",
         flush=True,
     )
 
@@ -275,11 +275,11 @@ def run_task_episode(task_id: str, seed: int, max_steps: int = 10):
             score = 0.9
 
         success = score > 0.5
-        log_end(success=success, steps=steps_taken, rewards=rewards)
+        log_end(task=task_id, score=score, success=success, steps=steps_taken, rewards=rewards)
         return steps_taken, rewards, score
 
     except Exception:
-        log_end(success=False, steps=steps_taken, rewards=rewards if rewards else [0.1])
+        log_end(task=task_id, score=0.1, success=False, steps=steps_taken, rewards=rewards if rewards else [0.1])
         return steps_taken, rewards if rewards else [0.1], 0.1
 
 
