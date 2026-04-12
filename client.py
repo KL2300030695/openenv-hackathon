@@ -21,7 +21,7 @@ Usage (Docker):
 
 from __future__ import annotations
 
-from app.models import HealthcareAction, HealthcareObservation
+from models import HealthcareAction, HealthcareObservation
 
 try:
     from openenv.core.env_client import EnvClient

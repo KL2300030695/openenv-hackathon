@@ -2,10 +2,12 @@
 Rule-based baseline agent for the Healthcare Scheduling environment.
 
 Strategy:
-    1. Sort waiting patients by priority (1 = highest).
-    2. For each patient, try their preferred doctor first.
-    3. If preferred doctor has no free slots, try any other doctor.
-    4. If no slots at all, waitlist the patient.
+    1. Sort waiting patients by priority (1 = highest urgency).
+    2. Match patient's required_specialty to a compatible doctor.
+    3. Within matching doctors, try preferred doctor first.
+    4. Match time preference (morning slots 0-3, afternoon slots 4-7).
+    5. If no matching slots, try any compatible doctor.
+    6. If all else fails, waitlist the patient.
 """
 
 from typing import Any, Dict, List
@@ -15,7 +17,8 @@ class BaselineAgent:
     """
     Rule-based agent for appointment scheduling.
 
-    Works with both the typed HealthcareEnvironment and the dict-based
+    Handles specialty matching, priority ordering, and time preferences.
+    Works with both the typed HealthcareEnvironment and dict-based
     observation format.
     """
 
@@ -24,10 +27,11 @@ class BaselineAgent:
 
     def select_action(self, obs: Dict[str, Any]) -> Dict[str, Any]:
         """
-        Select the best action given the current observation.
+        Select the best scheduling action given the current observation.
 
         Args:
-            obs: Dict with doctor_slots, patients, waiting_queue.
+            obs: Dict with doctor_slots, doctor_specialties, patients,
+                 waiting_queue.
 
         Returns:
             Action dict with type, patient_id, doctor_id, slot_id.
@@ -38,37 +42,59 @@ class BaselineAgent:
 
         patients = obs.get("patients", {})
         doctor_slots = obs.get("doctor_slots", {})
+        doctor_specialties = obs.get("doctor_specialties", {})
 
         # Sort waiting patients by priority (1 is highest)
-        waiting_patients = [patients[pid] for pid in waiting_queue if pid in patients]
-        waiting_patients.sort(key=lambda x: x["priority"])
+        waiting_patients = [
+            patients[pid] for pid in waiting_queue if pid in patients
+        ]
+        waiting_patients.sort(key=lambda x: x.get("priority", 3))
 
         for patient in waiting_patients:
             pid = patient["id"]
-            preferred_doctor = patient["preferred_doctor"]
+            preferred_doctor = patient.get("preferred_doctor", 0)
+            required_specialty = patient.get("required_specialty", "General Medicine")
+            time_preference = patient.get("time_preference", "morning")
 
-            # Convert preferred_doctor to string key if needed
-            pref_key = str(preferred_doctor) if str(preferred_doctor) in doctor_slots else preferred_doctor
+            # ── Find doctors with compatible specialty ──
+            matching_docs = []
+            for did, spec in doctor_specialties.items():
+                if (spec == required_specialty
+                        or spec == "General Medicine"
+                        or required_specialty == "General Medicine"):
+                    matching_docs.append(did)
 
-            # 1. Try preferred doctor
-            if pref_key in doctor_slots:
-                slots = doctor_slots[pref_key]
-                for sid, available in enumerate(slots):
-                    if available:
-                        return {
-                            "type": "book",
-                            "patient_id": pid,
-                            "doctor_id": preferred_doctor,
-                            "slot_id": sid,
-                        }
+            # Fallback: all doctors
+            if not matching_docs:
+                matching_docs = list(doctor_slots.keys())
 
-            # 2. Try any other doctor
-            for did, slots in doctor_slots.items():
-                did_int = int(did) if isinstance(did, str) else did
-                if did_int == preferred_doctor:
+            # Sort: preferred doctor first
+            pref_key = str(preferred_doctor)
+            matching_docs.sort(key=lambda d: (0 if str(d) == pref_key else 1))
+
+            # ── Determine slot preference ──
+            num_slots = (
+                max(len(slots) for slots in doctor_slots.values())
+                if doctor_slots else 8
+            )
+            half = num_slots // 2
+            if time_preference == "morning":
+                pref_slots = list(range(0, half))
+                other_slots = list(range(half, num_slots))
+            else:
+                pref_slots = list(range(half, num_slots))
+                other_slots = list(range(0, half))
+
+            for did in matching_docs:
+                did_key = str(did) if str(did) in doctor_slots else did
+                if did_key not in doctor_slots:
                     continue
-                for sid, available in enumerate(slots):
-                    if available:
+                slots = doctor_slots[did_key]
+                did_int = int(did)
+
+                # Try preferred time slots first
+                for sid in pref_slots:
+                    if sid < len(slots) and slots[sid]:
                         return {
                             "type": "book",
                             "patient_id": pid,
@@ -76,7 +102,17 @@ class BaselineAgent:
                             "slot_id": sid,
                         }
 
-        # 3. No slots available, waitlist the first patient
+                # Then try other time slots
+                for sid in other_slots:
+                    if sid < len(slots) and slots[sid]:
+                        return {
+                            "type": "book",
+                            "patient_id": pid,
+                            "doctor_id": did_int,
+                            "slot_id": sid,
+                        }
+
+        # No slots available anywhere, waitlist the first patient
         first_pid = waiting_queue[0]
         pid_int = int(first_pid) if isinstance(first_pid, str) else first_pid
         return {"type": "waitlist", "patient_id": pid_int}

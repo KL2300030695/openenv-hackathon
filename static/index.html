@@ -247,7 +247,7 @@
     /* DOCTORS GRID */
     .doctors-grid {
       display: grid;
-      grid-template-columns: repeat(3, 1fr);
+      grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
       gap: 14px;
     }
     @media (max-width: 700px) {
@@ -274,7 +274,7 @@
     }
     .slots-grid {
       display: grid;
-      grid-template-columns: repeat(5, 1fr);
+      grid-template-columns: repeat(4, 1fr);
       gap: 6px;
     }
     .slot {
@@ -311,7 +311,7 @@
     }
     .slot-times {
       display: grid;
-      grid-template-columns: repeat(5, 1fr);
+      grid-template-columns: repeat(4, 1fr);
       gap: 6px;
       margin-top: 4px;
     }
@@ -670,10 +670,13 @@
               <label>Slot ID</label>
               <select id="action-slot">
                 <option value="0">Slot 0 (9:00 AM)</option>
-                <option value="1">Slot 1 (10:00 AM)</option>
-                <option value="2">Slot 2 (11:00 AM)</option>
-                <option value="3">Slot 3 (12:00 PM)</option>
-                <option value="4">Slot 4 (1:00 PM)</option>
+                <option value="1">Slot 1 (9:30 AM)</option>
+                <option value="2">Slot 2 (10:00 AM)</option>
+                <option value="3">Slot 3 (10:30 AM)</option>
+                <option value="4">Slot 4 (2:00 PM)</option>
+                <option value="5">Slot 5 (2:30 PM)</option>
+                <option value="6">Slot 6 (3:00 PM)</option>
+                <option value="7">Slot 7 (3:30 PM)</option>
               </select>
             </div>
             <button class="btn btn-primary" style="width:100%;justify-content:center;" id="btn-step" onclick="stepEnv()" disabled>
@@ -709,9 +712,9 @@
 
 <script>
   const API = '';  // same origin
-  const DOCTOR_NAMES = ['Dr. Patel', 'Dr. Sharma', 'Dr. Gupta'];
-  const DOCTOR_SPECS = ['General Medicine', 'Internal Medicine', 'Pediatrics'];
-  const SLOT_TIMES = ['9:00 AM', '10:00 AM', '11:00 AM', '12:00 PM', '1:00 PM'];
+  const DOCTOR_NAMES = ['Dr. Patel', 'Dr. Sharma', 'Dr. Gupta', 'Dr. Reddy', 'Dr. Kumar'];
+  const DOCTOR_SPECS = ['General Medicine', 'Cardiology', 'Orthopedics', 'Pediatrics', 'Dermatology'];
+  const SLOT_TIMES = ['9:00 AM', '9:30 AM', '10:00 AM', '10:30 AM', '2:00 PM', '2:30 PM', '3:00 PM', '3:30 PM'];
   const PRIORITY_LABELS = { 1: 'High', 2: 'Medium', 3: 'Low' };
   const PRIORITY_CLASSES = { 1: 'priority-high', 2: 'priority-medium', 3: 'priority-low' };
 

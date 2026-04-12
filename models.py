@@ -1,8 +1,11 @@
 """
 Data models for the Healthcare Scheduling Environment.
+
+Typed Pydantic models extending the OpenEnv base classes for
+actions, observations, and state management.
 """
 
-from typing import Any, Dict, List, Optional, Union, Literal
+from typing import Any, Dict, List, Optional, Union
 
 from pydantic import Field
 from openenv.core.env_server import Action, Observation, State
@@ -35,9 +38,11 @@ class HealthcareObservation(Observation):
     """Observation from the Healthcare Scheduling environment."""
 
     doctor_slots: Optional[Dict[str, List[bool]]] = None
+    doctor_specialties: Optional[Dict[str, str]] = None
     patients: Optional[Dict[str, Dict[str, Any]]] = None
     waiting_queue: Optional[List[str]] = None
     current_step: Optional[int] = None
+    max_steps: Optional[int] = None
     info: Optional[Dict[str, Any]] = None
     score: Optional[float] = None
 

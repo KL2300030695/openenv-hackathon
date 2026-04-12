@@ -69,63 +69,72 @@ def log_end(task: str, score: float, success: bool, steps: int, rewards: List[fl
     )
 
 
-# ── LLM action selection (with memory of past failures) ─────────────
+# ── LLM action selection (specialty-aware with history) ─────────────
 def get_action_from_llm(
     obs: Dict[str, Any],
     action_history: List[Dict[str, Any]],
 ) -> Dict[str, Any]:
     """
-    Asks the LLM to choose an action based on the current environment state.
-    Includes history of past actions so the LLM avoids repeating mistakes.
+    Asks the LLM to choose a scheduling action based on hospital state.
+    Includes specialty constraints, priority info, and past action history.
     """
-    # Build a concise summary of past actions for the LLM
+    # Build history summary (last 8 actions for context window)
     history_lines = ""
     if action_history:
-        history_lines = "\n\nPrevious actions taken this episode:\n"
-        for h in action_history:
-            status = "SUCCESS" if h.get("reward", 0) > 0 else "FAILED"
+        history_lines = "\n\nPrevious actions this episode:\n"
+        for h in action_history[-8:]:
+            status = "SUCCESS" if h.get("reward", 0) > 0.3 else "FAILED"
             err = h.get("error", "")
             err_str = f" - Error: {err}" if err else ""
             history_lines += f"  - {h['action_str']} => {status} (reward={h['reward']:.2f}){err_str}\n"
-        history_lines += "\nDO NOT repeat any failed actions. Choose a DIFFERENT doctor_id and slot_id.\n"
+        history_lines += "\nDO NOT repeat any failed actions. Choose DIFFERENT doctor_id and slot_id.\n"
 
-    # Build a compact view of which slots are actually available
-    available_slots = []
+    # Build doctor availability with specialties
+    doctor_specialties = obs.get("doctor_specialties", {})
     doctor_slots = obs.get("doctor_slots", {})
+    available_lines = []
     for did, slots in doctor_slots.items():
-        for sid, avail in enumerate(slots):
-            if avail:
-                available_slots.append(f"doctor={did}, slot={sid}")
+        specialty = doctor_specialties.get(str(did), "Unknown")
+        free_slots = [str(sid) for sid, avail in enumerate(slots) if avail]
+        if free_slots:
+            morning = [s for s in free_slots if int(s) < 4]
+            afternoon = [s for s in free_slots if int(s) >= 4]
+            available_lines.append(
+                f"  Doctor {did} ({specialty}): morning slots={morning}, afternoon slots={afternoon}"
+            )
+    available_str = "\n".join(available_lines) if available_lines else "  NONE - all slots booked!"
 
-    available_str = "\n".join(f"  - {s}" for s in available_slots) if available_slots else "  NONE - all slots are booked!"
-
-    # Build compact patient info for waiting patients only
+    # Build waiting patient info with specialty needs
     waiting_queue = obs.get("waiting_queue", [])
     patients = obs.get("patients", {})
     waiting_info = []
-    for pid in waiting_queue:
+    for pid in waiting_queue[:10]:
         p = patients.get(str(pid), patients.get(pid, {}))
         waiting_info.append(
-            f"  - Patient {pid}: priority={p.get('priority','?')}, preferred_doctor={p.get('preferred_doctor','?')}"
+            f"  Patient {pid}: priority={p.get('priority','?')}, "
+            f"needs={p.get('required_specialty','General Medicine')}, "
+            f"preferred_doctor={p.get('preferred_doctor','?')}, "
+            f"prefers={p.get('time_preference','any')} slots"
         )
-    waiting_str = "\n".join(waiting_info) if waiting_info else "  NONE - all patients are scheduled!"
+    waiting_str = "\n".join(waiting_info) if waiting_info else "  NONE - all patients scheduled!"
 
-    prompt = f"""You are an expert healthcare appointment scheduler. Book appointments efficiently.
+    prompt = f"""You are an expert healthcare appointment scheduler. Book appointments optimally.
 
-AVAILABLE SLOTS (True = free):
+DOCTORS & AVAILABLE SLOTS:
 {available_str}
 
-WAITING PATIENTS (need appointments):
+WAITING PATIENTS (sorted by urgency):
 {waiting_str}
 {history_lines}
-RULES:
-- ONLY book slots that are available (True).
-- Prioritize patients with lower priority number (1=highest priority).
-- Match patients with their preferred_doctor when possible for bonus reward.
-- If no slots are available for a patient, use "waitlist".
-- NEVER book a slot that is False (already taken).
+CRITICAL RULES:
+1. Patient's required_specialty MUST match doctor's specialty. General Medicine can see anyone; any patient needing General Medicine can see any doctor.
+2. Prioritise priority=1 patients first, then 2, then 3.
+3. Match patients to their preferred_doctor when possible.
+4. Match time_preference: morning=slots 0-3, afternoon=slots 4-7.
+5. ONLY use slots that are available (shown above).
+6. If no valid slots exist for a patient, use "waitlist".
 
-Respond with ONLY a JSON object:
+Respond with ONLY a valid JSON object:
 {{"type": "book", "patient_id": <int>, "doctor_id": <int>, "slot_id": <int>}}
 
 Your action:"""
@@ -148,14 +157,13 @@ Your action:"""
 
         return json.loads(text)
     except Exception:
-        # Silently log as fallback; do not print debug info to STDOUT
-        # Smart fallback: try to find an available slot for a waiting patient
         return _fallback_action(obs)
 
 
 def _fallback_action(obs: Dict[str, Any]) -> Dict[str, Any]:
     """
-    Rule-based fallback when LLM fails. Picks the best available action.
+    Rule-based fallback when LLM fails.
+    Respects specialty matching, priority ordering, and time preferences.
     """
     waiting_q = obs.get("waiting_queue", [])
     if not waiting_q:
@@ -163,30 +171,58 @@ def _fallback_action(obs: Dict[str, Any]) -> Dict[str, Any]:
 
     patients = obs.get("patients", {})
     doctor_slots = obs.get("doctor_slots", {})
+    doctor_specialties = obs.get("doctor_specialties", {})
 
     # Sort by priority (1 = highest)
     sorted_patients = []
     for pid in waiting_q:
         p = patients.get(str(pid), patients.get(pid, {}))
-        sorted_patients.append((pid, p.get("priority", 3), p.get("preferred_doctor", 0)))
+        sorted_patients.append((
+            pid,
+            p.get("priority", 3),
+            p.get("preferred_doctor", 0),
+            p.get("required_specialty", "General Medicine"),
+            p.get("time_preference", "morning"),
+        ))
     sorted_patients.sort(key=lambda x: x[1])
 
-    for pid, priority, pref_doc in sorted_patients:
+    for pid, priority, pref_doc, req_specialty, time_pref in sorted_patients:
         pid_int = int(pid)
-        # Try preferred doctor first
-        pref_key = str(pref_doc)
-        if pref_key in doctor_slots:
-            for sid, avail in enumerate(doctor_slots[pref_key]):
-                if avail:
-                    return {"type": "book", "patient_id": pid_int, "doctor_id": pref_doc, "slot_id": sid}
-        # Try any doctor
-        for did, slots in doctor_slots.items():
-            did_int = int(did)
-            for sid, avail in enumerate(slots):
-                if avail:
-                    return {"type": "book", "patient_id": pid_int, "doctor_id": did_int, "slot_id": sid}
 
-    # No slots left
+        # Find doctors with matching specialty (or General Medicine)
+        matching_docs = []
+        for did, spec in doctor_specialties.items():
+            if spec == req_specialty or spec == "General Medicine" or req_specialty == "General Medicine":
+                matching_docs.append(int(did))
+
+        if not matching_docs:
+            matching_docs = [int(d) for d in doctor_slots.keys()]
+
+        # Sort: preferred doctor first
+        matching_docs.sort(key=lambda d: (0 if d == pref_doc else 1))
+
+        # Determine preferred slot range
+        morning_range = range(0, 4)
+        afternoon_range = range(4, 8)
+        pref_range = morning_range if time_pref == "morning" else afternoon_range
+        other_range = afternoon_range if time_pref == "morning" else morning_range
+
+        # Try preferred time first, then other
+        for did in matching_docs:
+            did_str = str(did)
+            if did_str not in doctor_slots:
+                continue
+            slots = doctor_slots[did_str]
+
+            for sid in pref_range:
+                if sid < len(slots) and slots[sid]:
+                    return {"type": "book", "patient_id": pid_int, "doctor_id": did, "slot_id": sid}
+
+            for sid in other_range:
+                if sid < len(slots) and slots[sid]:
+                    return {"type": "book", "patient_id": pid_int, "doctor_id": did, "slot_id": sid}
+
+    # No slots available
     p_id = int(waiting_q[0])
     return {"type": "waitlist", "patient_id": p_id, "doctor_id": 0, "slot_id": 0}
 
@@ -202,13 +238,14 @@ def action_to_str(action: Dict[str, Any]) -> str:
 
 
 # ── Run a single task episode ───────────────────────────────────────
-def run_task_episode(task_id: str, seed: int, max_steps: int = 10):
+def run_task_episode(task_id: str, seed: int, max_steps: int = 20):
     """Run one task episode and return (steps, rewards, score)."""
     env = HealthcareEnvironment(seed=seed)
     obs = env.reset()
 
     obs_dict = {
         "doctor_slots": obs.doctor_slots,
+        "doctor_specialties": obs.doctor_specialties,
         "patients": obs.patients,
         "waiting_queue": obs.waiting_queue,
         "current_step": obs.current_step,
@@ -235,6 +272,7 @@ def run_task_episode(task_id: str, seed: int, max_steps: int = 10):
 
             obs_dict = {
                 "doctor_slots": obs.doctor_slots,
+                "doctor_specialties": obs.doctor_specialties,
                 "patients": obs.patients,
                 "waiting_queue": obs.waiting_queue,
                 "current_step": obs.current_step,
@@ -290,7 +328,7 @@ def run_inference():
     seeds = [42, 123, 456]
 
     for task_id, seed in zip(task_ids, seeds):
-        run_task_episode(task_id, seed=seed, max_steps=10)
+        run_task_episode(task_id, seed=seed, max_steps=20)
 
     sys.exit(0)
 

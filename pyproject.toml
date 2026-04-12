@@ -32,8 +32,8 @@ server = "server.app:main"
 
 [tool.setuptools]
 include-package-data = true
-packages = ["app", "app.server", "server", "tasks"]
-package-dir = { "app" = "app", "server" = "server", "tasks" = "tasks" }
+packages = ["server", "tasks"]
+package-dir = { "server" = "server", "tasks" = "tasks" }
 
 [tool.setuptools.package-data]
-app = ["**/*.yaml", "**/*.yml", "**/*.md"]
+"*" = ["**/*.yaml", "**/*.yml", "**/*.md"]
