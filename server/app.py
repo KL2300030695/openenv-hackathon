@@ -11,13 +11,16 @@ from models import HealthcareAction, HealthcareObservation
 
 app = create_fastapi_app(HealthcareEnvironment, HealthcareAction, HealthcareObservation)
 
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
+
+# Mount static directory
+STATIC_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "static")
+app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
+
 @app.get("/")
 def read_root():
-    return {
-        "name": "healthcare_scheduling",
-        "status": "running",
-        "version": "1.0.0",
-    }
+    return FileResponse(os.path.join(STATIC_DIR, "index.html"))
 
 def main():
     import uvicorn
