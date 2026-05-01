@@ -188,13 +188,14 @@ class HealthcareEnvironment(Environment):
             reward = 0.1
             info = {"error": "Invalid action type"}
 
+        clamped_reward = self._clamp_reward(reward)
         self._action_history.append({
             "step": self.current_step,
             "type": action_type,
             "patient_id": patient_id,
             "doctor_id": doctor_id,
             "slot_id": slot_id,
-            "reward": reward,
+            "reward": clamped_reward,
             "info": info,
         })
 
@@ -210,7 +211,7 @@ class HealthcareEnvironment(Environment):
         booked = sum(1 for p in self.patients.values() if p["status"] == "booked")
         self._state.score = min(max(booked / self.num_patients, 0.1), 0.9)
 
-        return self._make_obs(reward, info)
+        return self._make_obs(clamped_reward, info)
 
     @property
     def state(self) -> HealthcareState:
@@ -248,9 +249,13 @@ class HealthcareEnvironment(Environment):
 
     # ── Internal helpers ─────────────────────────────────────────────
 
+    def _clamp_reward(self, reward: float) -> float:
+        """Clamp reward to [0.1, 0.9] for validator compliance."""
+        return min(max(float(reward), 0.1), 0.9)
+
     def _make_obs(self, reward: float, info: Dict[str, Any]) -> HealthcareObservation:
-        """Create observation. Rewards clamped to [0.1, 0.9] for validator compliance."""
-        clamped_reward = min(max(float(reward), 0.1), 0.9)
+        """Create observation with clamped reward for validator compliance."""
+        clamped_reward = self._clamp_reward(reward)
         return HealthcareObservation(
             doctor_slots={str(k): v for k, v in self.doctor_slots.items()},
             doctor_specialties={str(k): v for k, v in self.doctor_specialties.items()},
