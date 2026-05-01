@@ -62,6 +62,9 @@ def test():
             )
             obs = env.step(action)
             assert obs.reward > 0.3, f"Correct specialty booking should reward > 0.3, got {obs.reward}"
+            assert abs(obs.reward - env._action_history[-1]["reward"]) < 1e-8, (
+                "Recorded action history reward must match returned observation reward"
+            )
             print(f"[OK] Specialty-matched booking works - reward={obs.reward:.2f}")
         else:
             print("[SKIP] No available slot for specialty-matched booking test")
